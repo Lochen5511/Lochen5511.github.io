@@ -1,12 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>AI 交互網站</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #chat-box { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: scroll; margin-bottom: 10px; }
+        .user-msg { color: blue; }
+        .ai-msg { color: green; }
+    </style>
 </head>
 <body>
-    <h1>歡迎來到我的 GitHub Pages 網站！</h1>
-    <p>這是我的第一個網頁。</p>
-</body>
-</html>
+    <h1>我的 AI 交互實驗室</h1>
+    
+    <div id="chat-box">
+        <p>系統：等待連線中...</p>
+    </div>
+
+    <input type="text" id="userInput" placeholder="隨便說點什麼...">
+    <button onclick="sendMessage()">傳送給電腦</button>
+
+    <script>
+        async function sendMessage() {
+            const inputField = document.getElementById('userInput');
+            const chatBox = document.getElementById('chat-box');
+            const message = inputField.value;
+
+            if (!message) return;
+
+            // 1. 顯示使用者的話在畫面上
+            chatBox.innerHTML += `<p class="user-msg"><b>你：</b> ${message}</p>`;
+            inputField.value = '';
+
+            // 2. 設定你的 Localtunnel 網址 (請確認這裡的網址與你終端機看到的一致)
+            // 注意：結尾要有 /chat
+            const tunnelUrl = "https://real-jobs-prove.loca.lt/chat"; 
+
+            try {
+                const response = await fetch(tunnelUrl, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'bypass-tunnel-reminder': 'true' // 繞過安全警告
+                    },
+                    body: JSON.stringify({ "message": message })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    chatBox.innerHTML += `<p class="ai-msg"><b>電腦回覆：</b> ${data.reply}</p>`;
+                } else {
+                    chatBox.innerHTML += `<p style="color:red">錯誤：伺服器回傳 ${response.status}</p>`;
+                }
+            } catch (error) {
+                chatBox.innerHTML += `<p style="color:red">錯誤：連線失敗，請檢查本地 Python 是否運行
