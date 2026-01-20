@@ -1,8 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+import openai
+import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
+load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+memory = []
+memory.append({
+    "role": "system",
+    "content": "You are a knight named Shrimp-Head Knight, and you have sworn to protect all the shrimp in the world."
+})
 
 # 完整的 CORS 設定，允許從任何來源訪問
 CORS(app, resources={
@@ -41,14 +52,20 @@ def chat():
         # 記錄到終端機
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] 收到訊息: {user_message}")
+        memory.append({"role": "user", "content":user_message})
         
         # 這裡可以加入你的 AI 邏輯
         # 例如：呼叫 Claude API、本地 AI 模型等
-        reply = f"本地電腦已收到：{user_message}"
+        reply = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=memory,
+            temperature=0.7,  # 此段為隨機度，從0到1，數值越大越隨機，越小越精確
+            )
+        ai_reply = (reply["choices"][0]["message"]["content"])
         
         # 回傳回覆
         return jsonify({
-            "reply": reply,
+            "reply": ai_reply,
             "timestamp": timestamp
         })
     
@@ -84,7 +101,7 @@ if __name__ == '__main__':
     print("=" * 50)
     print("📡 本地網址: http://localhost:5000")
     print("💡 提示: 請使用 Localtunnel 建立公網隧道")
-    print("   指令: lt --port 5000 --subdomain lochen5511")
+    print("   指令: npx localtunnel --port 5000 --subdomain lochen-test")
     print("=" * 50)
     
     # 啟動伺服器
