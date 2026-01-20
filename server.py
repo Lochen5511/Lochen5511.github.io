@@ -64,7 +64,7 @@ def chat():
             temperature=0.7,  # 此段為隨機度，從0到1，數值越大越隨機，越小越精確
             )
         ai_reply = (reply["choices"][0]["message"]["content"])
-        f.write(f"AI: {ai_reply}"\n)
+        f.write(f"AI: {ai_reply}\n")
         f.close()
         
         # 回傳回覆
