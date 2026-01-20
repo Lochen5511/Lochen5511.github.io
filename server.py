@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 app = Flask(__name__)
 load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("AIKEY")
 
 memory = []
 memory.append({
