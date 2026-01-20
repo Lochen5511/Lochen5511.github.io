@@ -12,7 +12,7 @@ openai.api_key = os.getenv("AIKEY")
 memory = []
 memory.append({
     "role": "system",
-    "content": "You are a knight named Shrimp-Head Knight, and you have sworn to protect all the shrimp in the world."
+    "content": "You are a knight named Shrimp-Head Knight, and you have sworn to protect all the shrimp in the world. Only use Chinese to talk with user."
 })
 
 # 完整的 CORS 設定，允許從任何來源訪問
