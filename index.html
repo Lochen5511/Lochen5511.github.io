@@ -167,7 +167,7 @@
 
     <div class="input-container">
         <input type="text" id="userInput" placeholder="隨便說點什麼..." onkeypress="handleKeyPress(event)">
-        <button id="sendBtn" onclick="sendMessage()">傳送給電腦</button>
+        <button id="sendBtn" onclick="sendMessage()">傳送訊息</button>
     </div>
 
     <script>
@@ -217,7 +217,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    chatBox.innerHTML += `<p class="ai-msg"><b>電腦回覆：</b> ${escapeHtml(data.reply)}</p>`;
+                    chatBox.innerHTML += `<p class="ai-msg"><b>蝦頭騎士：</b> ${escapeHtml(data.reply)}</p>`;
                     isChatEnded = true;
                     sendBtn.disabled = true;
                     document.getElementById('userInput').disabled = true;
@@ -259,7 +259,7 @@
                 
                 // 清空聊天框
                 const chatBox = document.getElementById('chat-box');
-                chatBox.innerHTML = '<p class="system-msg">✅ 系統：連線成功！可以開始對話了</p>';
+                chatBox.innerHTML = '<p class="system-msg">✅ 系統：連線成功！請在聊天框中輸入名字。</p>';
                 
                 // 重新啟用輸入框和按鈕
                 const sendBtn = document.getElementById('sendBtn');
@@ -267,7 +267,7 @@
                 const userInput = document.getElementById('userInput');
                 
                 sendBtn.disabled = false;
-                sendBtn.textContent = '傳送給電腦';
+                sendBtn.textContent = '傳送訊息';
                 endBtn.disabled = false;
                 endBtn.textContent = '結束對話';
                 userInput.disabled = false;
@@ -313,7 +313,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     currentUserId = data.user_id;  // 更新用戶 ID
-                    chatBox.innerHTML += `<p class="ai-msg"><b>電腦回覆：</b> ${escapeHtml(data.reply)}</p>`;
+                    chatBox.innerHTML += `<p class="ai-msg"><b>蝦頭騎士：</b> ${escapeHtml(data.reply)}</p>`;
                 } else {
                     chatBox.innerHTML += `<p class="error-msg">❌ 錯誤：伺服器回傳 ${response.status}</p>`;
                 }
@@ -322,7 +322,7 @@
             } finally {
                 // 恢復按鈕狀態
                 sendBtn.disabled = false;
-                sendBtn.textContent = '傳送給電腦';
+                sendBtn.textContent = '傳送訊息';
                 chatBox.scrollTop = chatBox.scrollHeight; // 再次捲到最下方
             }
         }

@@ -117,7 +117,7 @@ def chat():
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(f"=== 對話開始時間: {timestamp} ===\n")
                 f.write(f"用戶名字: {user_message}\n\n")
-                f.write(f"[{timestamp}] 系統提示: AI: {greeting_reply}\n")
+                f.write(f"[{timestamp}] AI: {greeting_reply}\n")
             
             return jsonify({
                 "reply": greeting_reply,
