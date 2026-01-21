@@ -12,9 +12,53 @@
             margin: 0 auto;
             background: #f5f5f5;
         }
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
         h1 {
             color: #333;
             text-align: center;
+            flex: 1;
+            margin: 0;
+        }
+        #endChatBtn {
+            padding: 10px 15px;
+            background: #d32f2f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+            margin-left: 10px;
+        }
+        #endChatBtn:hover {
+            background: #b71c1c;
+        }
+        #endChatBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #restartBtn {
+            padding: 10px 15px;
+            background: #388e3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+            margin-left: 10px;
+        }
+        #restartBtn:hover {
+            background: #2e7d32;
+        }
+        #restartBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
         #chat-box { 
             background: white;
@@ -100,10 +144,17 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+        .config-panel {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h1>🤖 我的 AI 交互實驗室</h1>
+    <div class="header-container">
+        <h1>🤖 我的 AI 交互實驗室</h1>
+        <button id="endChatBtn" onclick="endChat()">結束對話</button>
+        <button id="restartBtn" onclick="restartChat()">重新開始</button>
+    </div>
     
     <div class="config-panel">
         <label for="tunnelUrl">Localtunnel 網址：</label>
@@ -120,10 +171,111 @@
     </div>
 
     <script>
+        // 用於跟蹤用戶 ID 和對話狀態
+        let currentUserId = null;
+        let isChatEnded = false;
+
         // 按 Enter 鍵也能發送訊息
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
                 sendMessage();
+            }
+        }
+
+        // 結束對話函數
+        async function endChat() {
+            if (isChatEnded) {
+                alert('對話已結束');
+                return;
+            }
+
+            if (!currentUserId) {
+                alert('請先開始對話');
+                return;
+            }
+
+            const chatBox = document.getElementById('chat-box');
+            const sendBtn = document.getElementById('sendBtn');
+            const endBtn = document.getElementById('endChatBtn');
+            const tunnelUrlInput = document.getElementById('tunnelUrl');
+            const tunnelUrl = tunnelUrlInput.value.trim();
+
+            try {
+                // 禁用按鈕
+                sendBtn.disabled = true;
+                endBtn.disabled = true;
+
+                // 發送結束對話請求到後端
+                const response = await fetch(tunnelUrl.replace('/chat', '/end_chat'), {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'bypass-tunnel-reminder': 'true'
+                    },
+                    body: JSON.stringify({ "user_id": currentUserId })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    chatBox.innerHTML += `<p class="ai-msg"><b>電腦回覆：</b> ${escapeHtml(data.reply)}</p>`;
+                    isChatEnded = true;
+                    sendBtn.disabled = true;
+                    document.getElementById('userInput').disabled = true;
+                    endBtn.textContent = '對話已結束';
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                } else {
+                    alert('結束對話失敗');
+                    sendBtn.disabled = false;
+                    endBtn.disabled = false;
+                }
+            } catch (error) {
+                alert('錯誤：' + error.message);
+                sendBtn.disabled = false;
+                endBtn.disabled = false;
+            }
+        }
+
+        // 重新開始對話函數
+        async function restartChat() {
+            const tunnelUrlInput = document.getElementById('tunnelUrl');
+            const tunnelUrl = tunnelUrlInput.value.trim();
+
+            try {
+                if (currentUserId && isChatEnded) {
+                    // 通知後端重置用戶狀態
+                    await fetch(tunnelUrl.replace('/chat', '/restart_chat'), {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'bypass-tunnel-reminder': 'true'
+                        },
+                        body: JSON.stringify({ "user_id": currentUserId })
+                    }).catch(err => console.log('後端重置發出'));
+                }
+                
+                // 重置前端狀態
+                currentUserId = null;
+                isChatEnded = false;
+                
+                // 清空聊天框
+                const chatBox = document.getElementById('chat-box');
+                chatBox.innerHTML = '<p class="system-msg">✅ 系統：連線成功！可以開始對話了</p>';
+                
+                // 重新啟用輸入框和按鈕
+                const sendBtn = document.getElementById('sendBtn');
+                const endBtn = document.getElementById('endChatBtn');
+                const userInput = document.getElementById('userInput');
+                
+                sendBtn.disabled = false;
+                sendBtn.textContent = '傳送給電腦';
+                endBtn.disabled = false;
+                endBtn.textContent = '結束對話';
+                userInput.disabled = false;
+                userInput.value = '';
+                
+                alert('已重新開始對話，請輸入您的名字開始！');
+            } catch (error) {
+                alert('重新開始失敗：' + error.message);
             }
         }
 
@@ -155,11 +307,12 @@
                         'Content-Type': 'application/json',
                         'bypass-tunnel-reminder': 'true' // 繞過安全警告
                     },
-                    body: JSON.stringify({ "message": message })
+                    body: JSON.stringify({ "message": message, "user_id": currentUserId })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
+                    currentUserId = data.user_id;  // 更新用戶 ID
                     chatBox.innerHTML += `<p class="ai-msg"><b>電腦回覆：</b> ${escapeHtml(data.reply)}</p>`;
                 } else {
                     chatBox.innerHTML += `<p class="error-msg">❌ 錯誤：伺服器回傳 ${response.status}</p>`;
