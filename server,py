@@ -1,11 +1,15 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 import uuid
+import os
 from pathlib import Path
 from name import create_user_file
 
-app = Flask(__name__, static_folder='.')
+# 獲取當前檔案所在的絕對路徑
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__)
 
 # 用於存儲每個用戶的名字
 user_names = {}
@@ -117,22 +121,48 @@ def chat():
         print(f"❌ {error_msg}")
         return jsonify({"error": error_msg}), 500
 
-# 提供靜態檔案（HTML）
+# 提供 HTML 檔案
 @app.route('/')
 def index():
     """返回入口頁面"""
+    index_path = os.path.join(BASE_DIR, 'index.html')
+    print(f"🔍 嘗試讀取: {index_path}")
+    
+    if not os.path.exists(index_path):
+        return jsonify({
+            "error": "找不到 index.html",
+            "searched_path": index_path,
+            "current_dir": BASE_DIR,
+            "files_in_dir": os.listdir(BASE_DIR)
+        }), 404
+    
     try:
-        return send_from_directory('.', 'index.html')
-    except FileNotFoundError:
-        return jsonify({"error": "找不到 index.html"}), 404
+        with open(index_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return jsonify({"error": f"讀取檔案失敗: {str(e)}"}), 500
 
-@app.route('/<path:path>')
-def serve_static(path):
-    """提供其他靜態檔案"""
+@app.route('/main.html')
+def main_page():
+    """返回主頁面"""
+    main_path = os.path.join(BASE_DIR, 'main.html')
+    print(f"🔍 嘗試讀取: {main_path}")
+    
+    if not os.path.exists(main_path):
+        return jsonify({
+            "error": "找不到 main.html",
+            "searched_path": main_path,
+            "current_dir": BASE_DIR,
+            "files_in_dir": os.listdir(BASE_DIR)
+        }), 404
+    
     try:
-        return send_from_directory('.', path)
-    except FileNotFoundError:
-        return jsonify({"error": f"找不到檔案: {path}"}), 404
+        with open(main_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return jsonify({"error": f"讀取檔案失敗: {str(e)}"}), 500
 
 # 錯誤處理器
 @app.errorhandler(500)
@@ -145,6 +175,8 @@ if __name__ == '__main__':
     print("=" * 50)
     print("🚀 Flask 伺服器啟動中...")
     print("=" * 50)
+    print(f"📁 工作資料夾: {BASE_DIR}")
+    print(f"📄 檔案列表: {os.listdir(BASE_DIR)}")
     print("📡 本地網址: http://localhost:8000")
     print("📁 日誌資料夾:", LOG_FOLDER)
     print("💡 按 Ctrl+C 停止伺服器")
