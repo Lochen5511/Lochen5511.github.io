@@ -3,359 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 交互網站</title>
+    <title>歡迎</title>
     <style>
-        body { 
-            font-family: 'Microsoft JhengHei', sans-serif; 
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            background: #f5f5f5;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .header-container {
+        
+        body {
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
-            margin-bottom: 20px;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        
+        .welcome-box {
+            background: white;
+            padding: 50px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
         h1 {
             color: #333;
-            text-align: center;
-            flex: 1;
-            margin: 0;
+            margin-bottom: 30px;
+            font-size: 28px;
         }
-        #endChatBtn {
-            padding: 10px 15px;
-            background: #d32f2f;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-            margin-left: 10px;
-        }
-        #endChatBtn:hover {
-            background: #b71c1c;
-        }
-        #endChatBtn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        #restartBtn {
-            padding: 10px 15px;
-            background: #388e3c;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-            margin-left: 10px;
-        }
-        #restartBtn:hover {
-            background: #2e7d32;
-        }
-        #restartBtn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        #chat-box { 
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px; 
-            height: 400px; 
-            overflow-y: auto; 
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .user-msg { 
-            color: #0066cc;
-            margin: 8px 0;
-            padding: 8px;
-            background: #e3f2fd;
-            border-radius: 5px;
-        }
-        .ai-msg { 
-            color: #2e7d32;
-            margin: 8px 0;
-            padding: 8px;
-            background: #e8f5e9;
-            border-radius: 5px;
-        }
-        .system-msg {
-            color: #666;
-            font-style: italic;
-            text-align: center;
-        }
-        .error-msg {
-            color: #d32f2f;
-            background: #ffebee;
-            padding: 8px;
-            border-radius: 5px;
-            margin: 8px 0;
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-        }
-        #userInput { 
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        
+        input {
+            width: 100%;
+            padding: 15px 20px;
             font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.3s;
         }
+        
+        input:focus {
+            border-color: #667eea;
+        }
+        
         button {
-            padding: 12px 24px;
-            background: #1976d2;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
             font-size: 16px;
-            transition: background 0.3s;
+            font-weight: 600;
+            color: white;
+            background: #667eea;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
         }
-        button:hover {
-            background: #1565c0;
+        
+        button:hover:not(:disabled) {
+            background: #5568d3;
         }
+        
+        button:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        
         button:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
-        .config-panel {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .config-panel label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: bold;
-        }
-        .config-panel input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .config-panel {
+        
+        .message {
+            font-size: 14px;
+            margin-top: 10px;
             display: none;
+        }
+        
+        .error {
+            color: #e74c3c;
+        }
+        
+        .success {
+            color: #27ae60;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="header-container">
-        <h1>🤖 我的 AI 交互實驗室</h1>
-        <button id="endChatBtn" onclick="endChat()">結束對話</button>
-        <button id="restartBtn" onclick="restartChat()">重新開始</button>
-    </div>
-    
-    <div class="config-panel">
-        <label for="tunnelUrl">Localtunnel 網址：</label>
-        <input type="text" id="tunnelUrl" value="https://lochen5511.loca.lt/chat" placeholder="https://your-tunnel.loca.lt/chat">
-    </div>
-
-    <div id="chat-box">
-        <p class="system-msg">系統：等待連線中...</p>
-    </div>
-
-    <div class="input-container">
-        <input type="text" id="userInput" placeholder="隨便說點什麼..." onkeypress="handleKeyPress(event)">
-        <button id="sendBtn" onclick="sendMessage()">傳送訊息</button>
+    <div class="welcome-box">
+        <h1>請輸入您的名字</h1>
+        <input 
+            type="text" 
+            id="nameInput" 
+            placeholder="您的名字"
+            autocomplete="off"
+            maxlength="50"
+        >
+        <button id="enterBtn" onclick="enterSite()">
+            進入
+            <span id="loading" class="loading" style="display: none;"></span>
+        </button>
+        <div class="message" id="message"></div>
     </div>
 
     <script>
-        // 用於跟蹤用戶 ID 和對話狀態
-        let currentUserId = null;
-        let isChatEnded = false;
-
-        // 按 Enter 鍵也能發送訊息
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        }
-
-        // 結束對話函數
-        async function endChat() {
-            if (isChatEnded) {
-                alert('對話已結束');
-                return;
-            }
-
-            if (!currentUserId) {
-                alert('請先開始對話');
-                return;
-            }
-
-            const chatBox = document.getElementById('chat-box');
-            const sendBtn = document.getElementById('sendBtn');
-            const endBtn = document.getElementById('endChatBtn');
-            const tunnelUrlInput = document.getElementById('tunnelUrl');
-            const tunnelUrl = tunnelUrlInput.value.trim();
-
-            try {
-                // 禁用按鈕
-                sendBtn.disabled = true;
-                endBtn.disabled = true;
-
-                // 發送結束對話請求到後端
-                const response = await fetch(tunnelUrl.replace('/chat', '/end_chat'), {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'bypass-tunnel-reminder': 'true'
-                    },
-                    body: JSON.stringify({ "user_id": currentUserId })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    chatBox.innerHTML += `<p class="ai-msg"><b>蝦頭騎士：</b> ${escapeHtml(data.reply)}</p>`;
-                    isChatEnded = true;
-                    sendBtn.disabled = true;
-                    document.getElementById('userInput').disabled = true;
-                    endBtn.textContent = '對話已結束';
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                } else {
-                    alert('結束對話失敗');
-                    sendBtn.disabled = false;
-                    endBtn.disabled = false;
-                }
-            } catch (error) {
-                alert('錯誤：' + error.message);
-                sendBtn.disabled = false;
-                endBtn.disabled = false;
-            }
-        }
-
-        // 重新開始對話函數
-        async function restartChat() {
-            const tunnelUrlInput = document.getElementById('tunnelUrl');
-            const tunnelUrl = tunnelUrlInput.value.trim();
-
-            try {
-                if (currentUserId && isChatEnded) {
-                    // 通知後端重置用戶狀態
-                    await fetch(tunnelUrl.replace('/chat', '/restart_chat'), {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'bypass-tunnel-reminder': 'true'
-                        },
-                        body: JSON.stringify({ "user_id": currentUserId })
-                    }).catch(err => console.log('後端重置發出'));
-                }
-                
-                // 重置前端狀態
-                currentUserId = null;
-                isChatEnded = false;
-                
-                // 清空聊天框
-                const chatBox = document.getElementById('chat-box');
-                chatBox.innerHTML = '<p class="system-msg">✅ 系統：連線成功！請在聊天框中輸入名字。</p>';
-                
-                // 重新啟用輸入框和按鈕
-                const sendBtn = document.getElementById('sendBtn');
-                const endBtn = document.getElementById('endChatBtn');
-                const userInput = document.getElementById('userInput');
-                
-                sendBtn.disabled = false;
-                sendBtn.textContent = '傳送訊息';
-                endBtn.disabled = false;
-                endBtn.textContent = '結束對話';
-                userInput.disabled = false;
-                userInput.value = '';
-                
-                alert('已重新開始對話，請輸入您的名字開始！');
-            } catch (error) {
-                alert('重新開始失敗：' + error.message);
-            }
-        }
-
-        async function sendMessage() {
-            const inputField = document.getElementById('userInput');
-            const chatBox = document.getElementById('chat-box');
-            const sendBtn = document.getElementById('sendBtn');
-            const tunnelUrlInput = document.getElementById('tunnelUrl');
-            const message = inputField.value.trim();
-
-            if (!message) return;
-
-            // 禁用按鈕防止重複發送
-            sendBtn.disabled = true;
-            sendBtn.textContent = '傳送中...';
-
-            // 1. 顯示使用者的話在畫面上
-            chatBox.innerHTML += `<p class="user-msg"><b>你：</b> ${escapeHtml(message)}</p>`;
-            inputField.value = '';
-            chatBox.scrollTop = chatBox.scrollHeight; // 自動捲到最下方
-
-            // 2. 取得 Localtunnel 網址
-            const tunnelUrl = tunnelUrlInput.value.trim();
-
-            try {
-                const response = await fetch(tunnelUrl, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'bypass-tunnel-reminder': 'true' // 繞過安全警告
-                    },
-                    body: JSON.stringify({ "message": message, "user_id": currentUserId })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    currentUserId = data.user_id;  // 更新用戶 ID
-                    chatBox.innerHTML += `<p class="ai-msg"><b>蝦頭騎士：</b> ${escapeHtml(data.reply)}</p>`;
-                } else {
-                    chatBox.innerHTML += `<p class="error-msg">❌ 錯誤：伺服器回傳 ${response.status}</p>`;
-                }
-            } catch (error) {
-                chatBox.innerHTML += `<p class="error-msg">❌ 錯誤：連線失敗<br>請檢查：<br>1. 本地 Python 伺服器是否運行<br>2. Localtunnel 網址是否正確<br>3. 網路連線是否正常<br><small>詳細錯誤：${error.message}</small></p>`;
-            } finally {
-                // 恢復按鈕狀態
-                sendBtn.disabled = false;
-                sendBtn.textContent = '傳送訊息';
-                chatBox.scrollTop = chatBox.scrollHeight; // 再次捲到最下方
-            }
-        }
-
-        // 防止 XSS 攻擊的函數
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // 頁面載入時測試連線
-        window.addEventListener('load', async () => {
-            const chatBox = document.getElementById('chat-box');
-            const tunnelUrl = document.getElementById('tunnelUrl').value.trim();
-            
-            chatBox.innerHTML = '<p class="system-msg">系統：正在測試連線...</p>';
-            
-            try {
-                const response = await fetch(tunnelUrl.replace('/chat', '/health'), {
-                    method: 'GET',
-                    headers: { 'bypass-tunnel-reminder': 'true' }
-                });
-                
-                if (response.ok) {
-                    chatBox.innerHTML = '<p class="system-msg">✅ 系統：連線成功，請於對話框中輸入名字。</p>';
-                } else {
-                    chatBox.innerHTML = '<p class="system-msg">⚠️ 系統：無法連線到伺服器，請確認設定</p>';
-                }
-            } catch (error) {
-                chatBox.innerHTML = '<p class="system-msg">⚠️ 系統：無法連線到伺服器<br>請確認 Python 伺服器已啟動且網址正確</p>';
+        const nameInput = document.getElementById('nameInput');
+        const enterBtn = document.getElementById('enterBtn');
+        const message = document.getElementById('message');
+        const loading = document.getElementById('loading');
+        
+        // 按 Enter 也能提交
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                enterSite();
             }
         });
+        
+        // 輸入時隱藏訊息
+        nameInput.addEventListener('input', function() {
+            message.style.display = 'none';
+        });
+        
+        async function enterSite() {
+            const name = nameInput.value.trim();
+            
+            if (name === '') {
+                showMessage('請輸入您的名字', 'error');
+                nameInput.focus();
+                return;
+            }
+            
+            // 顯示載入狀態
+            enterBtn.disabled = true;
+            loading.style.display = 'inline-block';
+            message.style.display = 'none';
+            
+            try {
+                // 發送名字到後端
+                const response = await fetch('http://localhost:8000/api/save-name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: name })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 儲存名字到 sessionStorage
+                    sessionStorage.setItem('userName', name);
+                    
+                    // 顯示成功訊息
+                    showMessage('檔案已建立，正在跳轉...', 'success');
+                    
+                    // 1秒後跳轉到主頁面
+                    setTimeout(() => {
+                        window.location.href = 'main.html';
+                    }, 1000);
+                } else {
+                    showMessage(data.message || '發生錯誤', 'error');
+                    enterBtn.disabled = false;
+                    loading.style.display = 'none';
+                }
+            } catch (error) {
+                showMessage('無法連接到伺服器，請確認伺服器是否運行', 'error');
+                enterBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+        
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+        }
     </script>
 </body>
 </html>

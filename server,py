@@ -1,0 +1,156 @@
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from datetime import datetime
+import uuid
+from pathlib import Path
+from name import create_user_file
+
+app = Flask(__name__, static_folder='.')
+
+# 用於存儲每個用戶的名字
+user_names = {}
+# 用於存儲每個用戶的對話記憶（可選，如果需要記憶功能）
+user_messages = {}
+
+# 日誌資料夾路徑
+LOG_FOLDER = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+
+def ensure_log_folder():
+    """確保日誌資料夾存在"""
+    Path(LOG_FOLDER).mkdir(parents=True, exist_ok=True)
+
+# 完整的 CORS 設定，允許從任何來源訪問
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
+
+# 健康檢查端點
+@app.route('/api/health', methods=['GET'])
+def health():
+    """用於檢查伺服器是否正常運作"""
+    return jsonify({
+        "status": "ok",
+        "message": "伺服器運作正常",
+        "timestamp": datetime.now().isoformat()
+    })
+
+# 儲存名字端點
+@app.route('/api/save-name', methods=['POST'])
+def save_name():
+    """處理名字儲存請求"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "請求中沒有 JSON 資料"}), 400
+        
+        user_name = data.get('name', '')
+        
+        # 呼叫 name.py 的函式建立檔案
+        success, result = create_user_file(user_name)
+        
+        if success:
+            # 回傳成功
+            return jsonify({
+                'success': True,
+                'message': '檔案已建立',
+                'file_path': result
+            }), 200
+        else:
+            # 回傳錯誤
+            return jsonify({
+                'success': False,
+                'message': result
+            }), 400
+    
+    except Exception as e:
+        error_msg = f"伺服器錯誤: {str(e)}"
+        print(f"❌ {error_msg}")
+        return jsonify({"error": error_msg}), 500
+
+# 聊天端點（基本版本，可以根據需求擴展）
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """處理聊天訊息"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "請求中沒有 JSON 資料"}), 400
+        
+        user_message = data.get('message', '').strip()
+        user_id = data.get('user_id')
+        user_name = data.get('user_name', '用戶')
+        
+        if not user_message:
+            return jsonify({"error": "訊息不能為空"}), 400
+        
+        # 如果沒有 user_id，創建一個新的
+        if not user_id:
+            user_id = str(uuid.uuid4())
+        
+        # 儲存用戶名字
+        if user_id not in user_names:
+            user_names[user_id] = user_name
+        
+        # 這裡是簡單的回應邏輯，您可以替換成 AI API 調用
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 簡單的回應示例（您可以替換成 OpenAI API 調用）
+        ai_reply = f"收到您的訊息：「{user_message}」"
+        
+        # 記錄到控制台
+        print(f"[{timestamp}] {user_name}: {user_message}")
+        print(f"[{timestamp}] AI: {ai_reply}")
+        
+        # 回傳回覆
+        return jsonify({
+            "reply": ai_reply,
+            "user_id": user_id,
+            "timestamp": timestamp
+        }), 200
+    
+    except Exception as e:
+        error_msg = f"聊天錯誤: {str(e)}"
+        print(f"❌ {error_msg}")
+        return jsonify({"error": error_msg}), 500
+
+# 提供靜態檔案（HTML）
+@app.route('/')
+def index():
+    """返回入口頁面"""
+    return send_from_directory('.', 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """提供其他靜態檔案"""
+    return send_from_directory('.', path)
+
+# 錯誤處理器
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "找不到此端點"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "內部伺服器錯誤"}), 500
+
+if __name__ == '__main__':
+    ensure_log_folder()  # 確保日誌資料夾存在
+    
+    print("=" * 50)
+    print("🚀 Flask 伺服器啟動中...")
+    print("=" * 50)
+    print("📡 本地網址: http://localhost:8000")
+    print("📁 日誌資料夾:", LOG_FOLDER)
+    print("💡 按 Ctrl+C 停止伺服器")
+    print("=" * 50)
+    
+    # 啟動伺服器
+    app.run(
+        host='0.0.0.0',  # 允許外部連線
+        port=8000,
+        debug=True  # 開發模式
+    )
