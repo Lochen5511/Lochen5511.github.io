@@ -121,18 +121,20 @@ def chat():
 @app.route('/')
 def index():
     """返回入口頁面"""
-    return send_from_directory('.', 'index.html')
+    try:
+        return send_from_directory('.', 'index.html')
+    except FileNotFoundError:
+        return jsonify({"error": "找不到 index.html"}), 404
 
 @app.route('/<path:path>')
 def serve_static(path):
     """提供其他靜態檔案"""
-    return send_from_directory('.', path)
+    try:
+        return send_from_directory('.', path)
+    except FileNotFoundError:
+        return jsonify({"error": f"找不到檔案: {path}"}), 404
 
 # 錯誤處理器
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "找不到此端點"}), 404
-
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({"error": "內部伺服器錯誤"}), 500
