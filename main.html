@@ -187,34 +187,39 @@
         // 頁面載入時檢查登入狀態
         window.addEventListener('load', async () => {
             const chatBox = document.getElementById('chat-box');
-            
+
             // 檢查是否已輸入名字
             userName = sessionStorage.getItem('userName');
-            
             if (!userName) {
-                // 如果沒有名字，重定向回入口頁面
                 window.location.href = 'index.html';
                 return;
             }
-            
-            // 顯示用戶名字
+
             document.getElementById('userName').textContent = userName;
-            
-            // 測試伺服器連線
-            chatBox.innerHTML = '<p class="system-msg">系統：正在連線...</p>';
-            
+            chatBox.innerHTML = '<p class="system-msg">連線中...</p>';
+
             try {
-                const response = await fetch('http://localhost:8000/api/health', {
-                    method: 'GET'
+                // 自動觸發，讓 AI 先開口
+                const response = await fetch('http://localhost:8000/api/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        user_name: userName
+                    })
                 });
-                
+
                 if (response.ok) {
-                    chatBox.innerHTML = `<p class="system-msg">✅ 系統：連線成功！歡迎 ${userName}，開始聊天吧！</p>`;
+                    const data = await response.json();
+                    currentUserId = data.user_id;
+
+                    // 顯示 AI 的開場白
+                    chatBox.innerHTML = '';
+                    chatBox.innerHTML += `<p class="ai-msg"><b>蝦頭騎士：</b> ${escapeHtml(data.reply)}</p>`;
                 } else {
-                    chatBox.innerHTML = '<p class="system-msg">⚠️ 系統：無法連線到伺服器，請確認伺服器已啟動</p>';
-                }
+
             } catch (error) {
-                chatBox.innerHTML = '<p class="system-msg">⚠️ 系統：無法連線到伺服器<br>請確認 Python 伺服器已啟動 (python server.py)</p>';
+                chatBox.innerHTML = '<p class="system-msg">⚠️ 無法連線，請確認伺服器已啟動</p>';
             }
         });
     </script>

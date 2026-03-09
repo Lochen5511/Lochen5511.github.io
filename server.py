@@ -76,50 +76,29 @@ def save_name():
         return jsonify({"error": error_msg}), 500
 
 # 聊天端點（基本版本，可以根據需求擴展）
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    """處理聊天訊息"""
+@app.route('/api/init', methods=['POST'])
+def init():
+    """用戶進入頁面時自動觸發，AI 先開口"""
     try:
         data = request.json
-        if not data:
-            return jsonify({"error": "請求中沒有 JSON 資料"}), 400
-        
-        user_message = data.get('message', '').strip()
-        user_id = data.get('user_id')
+        user_id = data.get('user_id') or str(uuid.uuid4())
         user_name = data.get('user_name', '用戶')
-        
-        if not user_message:
-            return jsonify({"error": "訊息不能為空"}), 400
-        
-        # 如果沒有 user_id，創建一個新的
-        if not user_id:
-            user_id = str(uuid.uuid4())
-        
-        # 儲存用戶名字
-        if user_id not in user_names:
-            user_names[user_id] = user_name
-        
-        # 這裡是簡單的回應邏輯，您可以替換成 AI API 調用
+
+        user_names[user_id] = user_name
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 簡單的回應示例（您可以替換成 OpenAI API 調用）
-        ai_reply = f"收到您的訊息：「{user_message}」"
-        
-        # 記錄到控制台
-        print(f"[{timestamp}] {user_name}: {user_message}")
-        print(f"[{timestamp}] AI: {ai_reply}")
-        
-        # 回傳回覆
+        opening_message = f"嗨{user_name}！我是本次學習的主持人「艾評」！"
+
+        print(f"[{timestamp}] {user_name} 進入系統")
+
         return jsonify({
-            "reply": ai_reply,
+            "reply": opening_message,
             "user_id": user_id,
             "timestamp": timestamp
         }), 200
-    
+
     except Exception as e:
-        error_msg = f"聊天錯誤: {str(e)}"
-        print(f"❌ {error_msg}")
-        return jsonify({"error": error_msg}), 500
+        return jsonify({"error": f"初始化錯誤: {str(e)}"}), 500
 
 # 提供 HTML 檔案
 @app.route('/')
