@@ -1,0 +1,67 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import os
+from datetime import datetime
+
+app = Flask(__name__)
+CORS(app)  # 允許來自 GitHub Pages 的跨域請求
+
+LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+
+@app.route('/log', methods=['POST'])
+def log_message():
+    data = request.get_json()
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+    role       = data.get('role', 'unknown')   # 'user' 或 'ai'
+    message    = data.get('message', '').strip()
+
+    if not message:
+        return jsonify({'success': False, 'error': '訊息為空'}), 400
+
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    # 使用與登入時相同的帶時間戳檔名
+    filename = f"{username}_{session_id}.txt" if session_id else f"{username}.txt"
+    log_path = os.path.join(LOG_DIR, filename)
+
+    label = '用戶' if role == 'user' else 'AI'
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    with open(log_path, 'a', encoding='utf-8') as f:
+        f.write(f"[{timestamp}] {label}：{message}\n")
+
+    return jsonify({'success': True})
+
+
+@app.route('/greeting', methods=['GET'])
+def greeting():
+    return jsonify({'reply': '嗨，我是主持人「艾評」。'})
+
+
+@app.route('/enter', methods=['POST'])
+def enter():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+
+    if not username:
+        return jsonify({'success': False, 'error': '名字不能為空'}), 400
+
+    # 建立 log 資料夾（若不存在）
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    # 建立 {username}_{日期}_{時間}.txt，每次登入產生獨立檔案
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{username}_{session_id}.txt"
+    log_path = os.path.join(LOG_DIR, filename)
+    with open(log_path, 'a', encoding='utf-8') as f:
+        f.write(f"[登入] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    # 回傳 session_id 讓前端後續 log 使用
+    return jsonify({'success': True, 'session_id': session_id})
+
+
+if __name__ == '__main__':
+    print("✅ name.py 伺服器啟動中...")
+    print(f"📁 Log 資料夾：{LOG_DIR}")
+    app.run(host='0.0.0.0', port=5000, debug=True)

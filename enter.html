@@ -15,8 +15,8 @@
       --dark: #1a1612;
       --gold: #c9a84c;
       --gold-light: #e8d5a3;
-      --glass-bg: rgba(58, 58, 58, 0.7);
-      --glass-border: rgba(201, 168, 76, 0.25);
+      --glass-bg: rgba(26, 22, 18, 0.97);
+      --glass-border: rgba(201, 168, 76, 0.35);
     }
 
     html, body {
@@ -37,7 +37,7 @@
     .bg {
       position: fixed;
       inset: 0;
-      background-image: url("./20251205_124326.jpg");
+      background-image: url('./20251205_124326.jpg');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -348,28 +348,40 @@
       if (e.key === 'Enter') handleEnter();
     });
 
-    function handleEnter() {
+    async function handleEnter() {
       const name = input.value.trim();
       if (!name) {
         errorMsg.classList.add('show');
         input.focus();
-        // 輕微震動效果
-        input.style.animation = 'none';
         input.style.borderBottomColor = '#e8a87c';
-        setTimeout(() => {
-          input.style.borderBottomColor = '';
-        }, 800);
+        setTimeout(() => { input.style.borderBottomColor = ''; }, 800);
         return;
       }
       errorMsg.classList.remove('show');
 
-      // 儲存名字並跳轉（可改為你的下一頁路徑）
+      // 儲存名字到 sessionStorage
       sessionStorage.setItem('userName', name);
-      console.log('進入系統，使用者：', name);
 
-      // TODO: 改成你的下一頁，例如：
-      // window.location.href = 'main.html';
-      alert(`歡迎，${name}！`);
+      // 通知本地 Python 後端建立 log 檔
+      try {
+        const res = await fetch('http://localhost:5000/enter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: name })
+        });
+        const data = await res.json();
+        if (data.session_id) {
+          sessionStorage.setItem('sessionId', data.session_id);
+        }
+      } catch (e) {
+        // 後端未啟動時產生本地 session_id 備用
+        const fallback = new Date().toISOString().replace(/[-:T.]/g,'').slice(0,15);
+        sessionStorage.setItem('sessionId', fallback);
+        console.warn('無法連接本地伺服器:', e);
+      }
+
+      // 跳轉至主頁面
+      window.location.href = 'main.html';
     }
   </script>
 
