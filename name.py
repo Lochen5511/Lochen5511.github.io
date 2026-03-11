@@ -34,8 +34,27 @@ def log_message():
     return jsonify({'success': True})
 
 
-@app.route('/greeting', methods=['GET'])
+@app.route('/greeting', methods=['POST'])
 def greeting():
+    import subprocess, threading
+
+    data       = request.get_json() or {}
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt") if session_id else os.path.join(LOG_DIR, f"{username}.txt")
+
+    # 在背景執行 button.py，傳入變數作為命令列參數
+    def run_button():
+        subprocess.Popen(
+            ['python', 'button.py',
+             '--username',   username,
+             '--session_id', session_id,
+             '--log_path',   log_path],
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+
+    threading.Thread(target=run_button, daemon=True).start()
+
     return jsonify({'reply': '嗨，我是主持人「艾評」。'})
 
 

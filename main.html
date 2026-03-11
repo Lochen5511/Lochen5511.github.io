@@ -524,7 +524,11 @@
   window.addEventListener('load', async () => {
     const typing = appendTyping();
     try {
-      const res = await fetch('http://localhost:5000/greeting');
+      const res = await fetch('http://localhost:5000/greeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: userName, session_id: sessionId })
+      });
       const data = await res.json();
       typing.remove();
       appendMsg(data.reply || '嗨，我是主持人「艾評」。', 'ai');
