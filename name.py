@@ -44,6 +44,10 @@ def push():
 def poll():
     """main.html 定期呼叫此端點，取出最新一則訊息"""
     session_id = request.args.get('session_id', '')
+
+    # debug：印出目前所有隊列狀態
+    print(f"[poll] session_id='{session_id}' 所有隊列：{ {k: len(v) for k, v in message_queues.items()} }")
+
     queue = message_queues.get(session_id, [])
 
     if queue:
@@ -100,7 +104,7 @@ def greeting():
 
     threading.Thread(target=run_button, daemon=True).start()
 
-    return jsonify({'reply': '> 系統初始化中。\n（若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教）'})
+    return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)'})
 
 
 @app.route('/enter', methods=['POST'])
