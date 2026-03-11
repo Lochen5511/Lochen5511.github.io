@@ -31,9 +31,8 @@ def push():
     if log_path:
         try:
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(f"[{timestamp}] AI：{text}\n")
+                f.write(f"AI：{text}\n")
         except Exception as e:
             print(f"[log 寫入失敗] {e}")
 
@@ -75,10 +74,9 @@ def log_message():
     log_path = os.path.join(LOG_DIR, filename)
 
     label = '用戶' if role == 'user' else 'AI'
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     with open(log_path, 'a', encoding='utf-8') as f:
-        f.write(f"[{timestamp}] {label}：{message}\n")
+        f.write(f"{label}：{message}\n")
 
     return jsonify({'success': True})
 
@@ -123,7 +121,7 @@ def enter():
     filename = f"{username}_{session_id}.txt"
     log_path = os.path.join(LOG_DIR, filename)
     with open(log_path, 'a', encoding='utf-8') as f:
-        f.write(f"[登入] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        pass  # 建立空檔案
 
     # 回傳 session_id 讓前端後續 log 使用
     return jsonify({'success': True, 'session_id': session_id})

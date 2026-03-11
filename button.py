@@ -61,16 +61,12 @@ def send(text: str, delay: float = 0):
 # 主要執行區塊（在此放置你的代碼）
 # ──────────────────────────────────────────
 def main():
-    write_log("button.py 已啟動")
-
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
     send('現在，讓我們開始校標關聯效度的問答。', delay=0)
     send('首先是闡發性問題', delay=2)
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
-
-    write_log("button.py 執行完畢")
     print("[button.py 執行完畢]")
 
 
