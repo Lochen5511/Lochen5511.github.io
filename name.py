@@ -100,7 +100,7 @@ def greeting():
 
     threading.Thread(target=run_button, daemon=True).start()
 
-    return jsonify({'reply': '嗨，我是主持人「艾評」。'})
+    return jsonify({'reply': '> 系統初始化中。\n（若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教）'})
 
 
 @app.route('/enter', methods=['POST'])
