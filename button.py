@@ -1,4 +1,6 @@
 import argparse
+import time
+import requests
 from datetime import datetime
 
 # ──────────────────────────────────────────
@@ -38,6 +40,24 @@ def write_log(message: str):
 
 
 # ──────────────────────────────────────────
+# 工具函數：發送訊息到隊列
+# ──────────────────────────────────────────
+def send(text: str, delay: float = 0):
+    """等待 delay 秒後，將訊息推入 name.py 的隊列"""
+    time.sleep(delay)
+    try:
+        requests.post('http://localhost:5000/push', json={
+            'text':       text,
+            'username':   username,
+            'session_id': session_id,
+            'log_path':   log_path,
+        })
+        print(f"[送出] {text}")
+    except Exception as e:
+        print(f"[送出失敗] {e}")
+
+
+# ──────────────────────────────────────────
 # 主要執行區塊（在此放置你的代碼）
 # ──────────────────────────────────────────
 def main():
@@ -45,6 +65,8 @@ def main():
 
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
+    send('現在，讓我們開始校標關聯效度的問答。', delay=0)
+    send('首先是闡發性問題', delay=2)
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
 

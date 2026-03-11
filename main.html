@@ -502,6 +502,19 @@
 
   const sessionId = sessionStorage.getItem('sessionId') || '';
 
+  // 每秒輪詢一次，取出 button.py 推送的訊息
+  setInterval(async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/poll?session_id=${encodeURIComponent(sessionId)}`);
+      const data = await res.json();
+      if (data.message) {
+        appendMsg(data.message, 'ai');
+      }
+    } catch (e) {
+      // 後端未啟動時靜默忽略
+    }
+  }, 1000);
+
   // 記錄訊息至本地 txt 檔
   async function logMessage(role, message) {
     try {

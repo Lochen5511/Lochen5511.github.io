@@ -2,11 +2,56 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 from datetime import datetime
+from collections import defaultdict
 
 app = Flask(__name__)
-CORS(app)  # 允許來自 GitHub Pages 的跨域請求
+CORS(app)
 
 LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+
+# 每個 session 有自己獨立的訊息隊列
+message_queues = defaultdict(list)
+
+@app.route('/push', methods=['POST'])
+def push():
+    """button.py 呼叫此端點，將訊息放進該 session 的隊列"""
+    data       = request.get_json()
+    text       = data.get('text', '').strip()
+    session_id = data.get('session_id', '')
+    username   = data.get('username', '未知').strip()
+    log_path   = data.get('log_path', '')
+
+    if not text:
+        return jsonify({'success': False}), 400
+
+    # 放進隊列
+    message_queues[session_id].append(text)
+
+    # 同步寫入 log
+    if log_path:
+        try:
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] AI：{text}\n")
+        except Exception as e:
+            print(f"[log 寫入失敗] {e}")
+
+    return jsonify({'success': True})
+
+
+@app.route('/poll', methods=['GET'])
+def poll():
+    """main.html 定期呼叫此端點，取出最新一則訊息"""
+    session_id = request.args.get('session_id', '')
+    queue = message_queues.get(session_id, [])
+
+    if queue:
+        text = queue.pop(0)
+        return jsonify({'message': text})
+
+    return jsonify({'message': None})
+
 
 @app.route('/log', methods=['POST'])
 def log_message():
