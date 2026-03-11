@@ -147,18 +147,19 @@
       opacity: 0;
       transform: translateY(10px);
       animation: msgIn 0.35s ease forwards;
-      align-items: flex-end;
+      align-items: flex-start;
       width: 100%;
     }
     .msg.user { flex-direction: row-reverse; }
 
-    /* 頭像欄：名字 + 圓圈 */
+    /* 頭像欄：名字 + 圓圈，靠頂對齊 */
     .avatar-col {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 5px;
       flex-shrink: 0;
+      padding-top: 0;
     }
     .avatar-name {
       font-family: 'Noto Serif TC', serif;
@@ -188,11 +189,12 @@
       color: var(--cream);
     }
 
-    /* 泡泡欄 */
+    /* 泡泡欄，靠頂對齊 */
     .msg-body {
       display: flex;
       flex-direction: column;
       max-width: calc(100% - 70px);
+      padding-top: 0;
     }
     .msg.user .msg-body { align-items: flex-end; }
 
@@ -220,6 +222,18 @@
       border-top-right-radius: 4px;
       color: var(--cream);
       max-width: 82%;
+    }
+
+    /* 手機端響應式 */
+    @media (max-width: 600px) {
+      .messages { padding: 16px 10px; }
+      .msg { gap: 8px; }
+      .avatar { width: 36px; height: 36px; font-size: 11px; }
+      .avatar-name { font-size: 10px; max-width: 40px; }
+      .msg-body { max-width: calc(100% - 54px); }
+      .msg.ai .bubble  { max-width: 100%; }
+      .msg.user .bubble { max-width: 100%; }
+      .bubble { font-size: 14px; padding: 10px 14px; }
     }
 
     .msg-time {
@@ -449,8 +463,8 @@
     div.className = `msg ${role}`;
     div.innerHTML = `
       <div class="avatar-col">
-        <span class="avatar-name">${label}</span>
         <div class="avatar">${role === 'ai' ? 'AI' : ''}</div>
+        <span class="avatar-name">${label}</span>
       </div>
       <div class="msg-body">
         <div class="bubble">${escHtml(text)}</div>
@@ -468,8 +482,8 @@
     div.id = 'typing';
     div.innerHTML = `
       <div class="avatar-col">
-        <span class="avatar-name">AI</span>
         <div class="avatar">AI</div>
+        <span class="avatar-name">AI</span>
       </div>
       <div class="msg-body">
         <div class="bubble typing-indicator">
