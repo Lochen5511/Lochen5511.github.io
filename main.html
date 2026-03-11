@@ -542,12 +542,12 @@
       });
       const data = await res.json();
       typing.remove();
-      appendMsg(data.reply || '嗨，我是主持人「艾評」。', 'ai');
-      logMessage('ai', data.reply || '嗨，我是主持人「艾評」。');
+      appendMsg(data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
+      logMessage('ai', data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
     } catch (err) {
       typing.remove();
-      appendMsg('嗨，我是主持人「艾評」。', 'ai');
-      logMessage('ai', '嗨，我是主持人「艾評」。');
+      appendMsg('> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
+      logMessage('ai', '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
     }
   });
 
