@@ -102,7 +102,8 @@ def wait_for_user(interval: float = 0.5) -> str:
 def main():
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
-    send('現在，讓我們開始校標關聯效度的問答。', delay=0)
+    send('你好，{username}！我是艾評。')
+    send('現在，讓我們開始校標關聯效度的問答。', delay=10)
     send('首先是闡發性問題', delay=2)
 
     # ── 示範：等待用戶回應並做出對應回應 ──

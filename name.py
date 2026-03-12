@@ -153,7 +153,6 @@ def greeting():
 
     return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)'})
 
-
 @app.route('/enter', methods=['POST'])
 def enter():
     data = request.get_json()
