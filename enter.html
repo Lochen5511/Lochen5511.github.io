@@ -372,6 +372,7 @@
         const data = await res.json();
         if (data.session_id) {
           sessionStorage.setItem('sessionId', data.session_id);
+          sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
         }
       } catch (e) {
         // 後端未啟動時產生本地 session_id 備用

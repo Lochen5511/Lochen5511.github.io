@@ -567,23 +567,19 @@
     charCount.textContent = '0 / 2000';
     sendBtn.classList.remove('active');
 
-    // 顯示打字動畫
-    const typing = appendTyping();
-
     try {
-      // ── 連接本地 Python 後端 ──
-      // 預設呼叫 http://localhost:5000/chat
-      const res = await fetch('http://localhost:5000/chat', {
+      await fetch('http://localhost:5000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, user: userName })
+        body: JSON.stringify({
+          message:    text,
+          username:   userName,
+          session_id: sessionId,
+          log_path:   sessionStorage.getItem('logPath') || ''
+        })
       });
-      const data = await res.json();
-      typing.remove();
-      appendMsg(data.reply || '（無回應）', 'ai');
-      logMessage('ai', data.reply || '（無回應）');
+      // AI 的回應由 button.py 透過 /push → /poll 機制送出，不在這裡處理
     } catch (err) {
-      typing.remove();
       appendMsg('⚠ 無法連接本地伺服器，請確認 Python 後端是否執行中。', 'ai');
     }
   }

@@ -15,6 +15,46 @@ message_queues = defaultdict(list)
 # 每個 session 的思考狀態
 thinking_states = {}
 
+# 等待用戶輸入的隊列（session_id -> 用戶訊息）
+user_input_queues = defaultdict(list)
+
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """接收用戶訊息，轉入 button.py 的等待隊列"""
+    data       = request.get_json()
+    message    = data.get('message', '').strip()
+    session_id = data.get('session_id', '')
+    username   = data.get('username', '未知').strip()
+    log_path   = data.get('log_path', '')
+
+    if not message:
+        return jsonify({'reply': ''}), 400
+
+    # 寫入 log
+    if log_path:
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"用戶：{message}\n")
+        except Exception as e:
+            print(f"[log 寫入失敗] {e}")
+
+    # 放進用戶輸入隊列，供 button.py 的 wait_for_user() 取用
+    user_input_queues[session_id].append(message)
+
+    return jsonify({'reply': ''})
+
+
+@app.route('/fetch_user_input', methods=['GET'])
+def fetch_user_input():
+    """button.py 輪詢此端點，等待用戶輸入"""
+    session_id = request.args.get('session_id', '')
+    queue = user_input_queues.get(session_id, [])
+    if queue:
+        msg = queue.pop(0)
+        return jsonify({'message': msg})
+    return jsonify({'message': None})
+
 
 @app.route('/thinking', methods=['POST'])
 def thinking():
