@@ -44,6 +44,19 @@ def main():
     write_log("button.py 已啟動")
 
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
+    send('要送出的訊息', delay=10)  # 範例：等待 10 秒後送出訊息
+    
+        # ── 示範：等待用戶回應並做出對應回應 ──
+    send('請問你對「效度」的理解是什麼？', delay=1)
+
+    user_reply = wait_for_user()          # 等待用戶發送訊息
+    print(f"[用戶說] {user_reply}")
+
+    # 根據用戶內容做出回應
+    if '測量' in user_reply or '準確' in user_reply:
+        send('很好！你掌握了效度的核心概念。', delay=1)
+    else:
+        send(f'你提到了「{user_reply}」，讓我們再深入討論一下。', delay=1)
 
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
