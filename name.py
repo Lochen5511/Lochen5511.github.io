@@ -12,6 +12,18 @@ LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
 # 每個 session 有自己獨立的訊息隊列
 message_queues = defaultdict(list)
 
+# 每個 session 的思考狀態
+thinking_states = {}
+
+
+@app.route('/thinking', methods=['POST'])
+def thinking():
+    data       = request.get_json()
+    session_id = data.get('session_id', '')
+    state      = data.get('thinking', False)
+    thinking_states[session_id] = state
+    return jsonify({'success': True})
+
 @app.route('/push', methods=['POST'])
 def push():
     """button.py 呼叫此端點，將訊息放進該 session 的隊列"""
@@ -43,17 +55,14 @@ def push():
 def poll():
     """main.html 定期呼叫此端點，取出最新一則訊息"""
     session_id = request.args.get('session_id', '')
-
-    # debug：印出目前所有隊列狀態
-    print(f"[poll] session_id='{session_id}' 所有隊列：{ {k: len(v) for k, v in message_queues.items()} }")
-
     queue = message_queues.get(session_id, [])
+    is_thinking = thinking_states.get(session_id, False)
 
     if queue:
         text = queue.pop(0)
-        return jsonify({'message': text})
+        return jsonify({'message': text, 'thinking': False})
 
-    return jsonify({'message': None})
+    return jsonify({'message': None, 'thinking': is_thinking})
 
 
 @app.route('/log', methods=['POST'])

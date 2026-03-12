@@ -234,17 +234,9 @@
       .bubble { font-size: 14px; padding: 10px 14px; }
     }
 
-    .msg-time {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 5px;
-      letter-spacing: 0.1em;
-      opacity: 0.7;
-    }
     .msg.user .msg-time { text-align: right; }
 
-    /* 打字動畫 */
+    /* 打字動畫（正在輸入氣泡） */
     .typing-indicator {
       display: flex; gap: 5px; align-items: center;
       padding: 14px 18px;
@@ -500,13 +492,25 @@
 
   const sessionId = sessionStorage.getItem('sessionId') || '';
 
+  let thinkingBubble = null;
+
   // 每秒輪詢一次，取出 button.py 推送的訊息
   setInterval(async () => {
     try {
       const res = await fetch(`http://localhost:5000/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
+
       if (data.message) {
+        // 有新訊息：移除思考氣泡，顯示訊息
+        if (thinkingBubble) { thinkingBubble.remove(); thinkingBubble = null; }
         appendMsg(data.message, 'ai');
+        logMessage('ai', data.message);
+      } else if (data.thinking && !thinkingBubble) {
+        // 開始思考：顯示思考氣泡
+        thinkingBubble = appendTyping();
+      } else if (!data.thinking && thinkingBubble) {
+        // 停止思考：移除氣泡
+        thinkingBubble.remove(); thinkingBubble = null;
       }
     } catch (e) {
       // 後端未啟動時靜默忽略

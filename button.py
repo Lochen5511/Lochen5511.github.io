@@ -44,7 +44,29 @@ def write_log(message: str):
 # ──────────────────────────────────────────
 def send(text: str, delay: float = 0):
     """等待 delay 秒後，將訊息推入 name.py 的隊列"""
-    time.sleep(delay)
+    if delay > 0:
+        # 通知前端顯示思考動畫
+        try:
+            requests.post('http://localhost:5000/thinking', json={
+                'username':   username,
+                'session_id': session_id,
+                'thinking':   True
+            })
+        except Exception as e:
+            print(f"[thinking 通知失敗] {e}")
+
+        time.sleep(delay)
+
+        # 通知前端隱藏思考動畫
+        try:
+            requests.post('http://localhost:5000/thinking', json={
+                'username':   username,
+                'session_id': session_id,
+                'thinking':   False
+            })
+        except Exception as e:
+            print(f"[thinking 通知失敗] {e}")
+    
     try:
         requests.post('http://localhost:5000/push', json={
             'text':       text,
