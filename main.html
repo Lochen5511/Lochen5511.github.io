@@ -234,6 +234,14 @@
       .bubble { font-size: 14px; padding: 10px 14px; }
     }
 
+    /* 並排按鈕列 */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
     /* 按鈕氣泡 */
     .btn-bubble {
       display: inline-block;
@@ -485,15 +493,28 @@
     const label = role === 'user' ? (userName || 'U') : 'AI';
 
     // 判斷是否為按鈕訊息
-    const isButton = text.startsWith('__BUTTON__');
+    const isButton  = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
+    const isButtons = text.startsWith('__BUTTONS__');
     let contentHtml = '';
 
-    if (isButton) {
+    if (isButtons) {
+      // 多按鈕並排
+      const parts = text.replace('__BUTTONS__', '').split(';');
+      const btns = parts.map(p => {
+        const [btnLabel, btnColor, btnSize, btnId] = p.split('||');
+        return `<button class="btn-bubble ${btnColor||'gold'} ${btnSize||'medium'}"
+          onclick="clickButton(this, '${(btnLabel||'').replace(/'/g,"\\'")}', '${(btnId||btnLabel||'').replace(/'/g,"\\'")}')">
+          ${escHtml(btnLabel||'')}
+        </button>`;
+      }).join('');
+      contentHtml = `<div class="btn-row">${btns}</div>`;
+    } else if (isButton) {
       const parts    = text.replace('__BUTTON__', '').split('||');
       const btnLabel = parts[0] || '';
       const btnColor = parts[1] || 'gold';
       const btnSize  = parts[2] || 'medium';
-      contentHtml = `<button class="btn-bubble ${btnColor} ${btnSize}" onclick="clickButton(this, '${btnLabel.replace(/'/g,"\\'")}')">
+      const btnId    = parts[3] || btnLabel;
+      contentHtml = `<button class="btn-bubble ${btnColor} ${btnSize}" onclick="clickButton(this, '${btnLabel.replace(/'/g,"\\'")}', '${btnId.replace(/'/g,"\\'")}')">
         ${escHtml(btnLabel)}
       </button>`;
     } else {
@@ -518,20 +539,23 @@
     return div;
   }
 
-  function clickButton(btn, label) {
+  function clickButton(btn, label, buttonId) {
     // 標記為已使用
     btn.classList.add('used');
     btn.textContent = '✓ ' + label;
 
-    // 顯示用戶點擊紀錄並送至後端
+    // 顯示用戶點擊紀錄
     appendMsg(label, 'user');
-    logMessage('user', label);
 
+    // 記錄至 log（格式：按鈕:ID:文字）
+    logMessage('user', `[按鈕:${buttonId}] ${label}`);
+
+    // 送至後端（讓 wait_for_user() 收到）
     fetch('http://localhost:5000/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message:    label,
+        message:    `${buttonId}:${label}`,
         username:   userName,
         session_id: sessionId,
         log_path:   sessionStorage.getItem('logPath') || ''

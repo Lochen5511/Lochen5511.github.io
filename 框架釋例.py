@@ -63,6 +63,10 @@ def main():
     send_button('略過', color='gray',  size='small')     # 灰色、小
     send_button('確認', color='blue',  size='medium')    # 藍色、中
     send_button('警告', color='red',   size='large')     # 紅色、大
+    send_button('開始', color='green', size='large', button_id='btn_start')
+    # send_button('略過', color='gray',  size='small', button_id='btn_skip')
+    # send_button('確認', color='blue',  size='medium', button_id='btn_confirm')
+    send_buttons(['開始', '略過', '確認'], colors=['green', 'gray', 'blue'], size='medium')
 
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑

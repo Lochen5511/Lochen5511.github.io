@@ -63,30 +63,79 @@ def send(text: str, delay: float = 0):
 # ──────────────────────────────────────────
 # 工具函數：發送按鈕
 # ──────────────────────────────────────────
-def send_button(label: str, delay: float = 0, color: str = 'gold', size: str = 'medium'):
+def send_button(label: str, delay: float = 0, color: str = 'gold', size: str = 'medium', button_id: str = ''):
     """發送一個可點擊的按鈕
     
     參數：
-        label  : 按鈕文字
-        delay  : 等待秒數
-        color  : 顏色 'gold'（預設）| 'red' | 'green' | 'blue' | 'gray'
-        size   : 大小 'small' | 'medium'（預設）| 'large'
+        label     : 按鈕文字
+        delay     : 等待秒數
+        color     : 顏色 'gold'（預設）| 'red' | 'green' | 'blue' | 'gray'
+        size      : 大小 'small' | 'medium'（預設）| 'large'
+        button_id : 按鈕的唯一識別碼（用於 log 記錄）
     """
     if delay > 0:
         _set_thinking(True)
         time.sleep(delay)
         _set_thinking(False)
 
+    bid = button_id if button_id else label  # 若未指定 ID，以文字作為 ID
+
     try:
         requests.post('http://localhost:5000/push', json={
-            'text':       f'__BUTTON__{label}||{color}||{size}',
+            'text':       f'__BUTTON__{label}||{color}||{size}||{bid}',
             'username':   username,
             'session_id': session_id,
             'log_path':   '',
         })
-        print(f"[按鈕] {label} (color={color}, size={size})")
+        print(f"[按鈕] {label} (id={bid}, color={color}, size={size})")
     except Exception as e:
         print(f"[按鈕送出失敗] {e}")
+
+
+# ──────────────────────────────────────────
+# 工具函數：等待用戶回應
+# ──────────────────────────────────────────
+def send_buttons(labels: list, delay: float = 0, colors: list = None, sizes: list = None, size: str = 'medium', button_ids: list = None):
+    """發送多個並排按鈕
+    
+    參數：
+        labels     : 按鈕文字列表，如 ['開始', '略過', '確認']
+        delay      : 等待秒數
+        colors     : 每個按鈕的顏色列表，如 ['green', 'gray', 'blue']
+        sizes      : 每個按鈕的大小列表（優先於 size）
+        size       : 統一大小（當 sizes 未指定時使用）
+        button_ids : 每個按鈕的 ID 列表
+    """
+    if delay > 0:
+        _set_thinking(True)
+        time.sleep(delay)
+        _set_thinking(False)
+
+    # 補齊預設值
+    n = len(labels)
+    colors     = colors     or ['gold'] * n
+    button_ids = button_ids or labels
+    if sizes:
+        size_list = sizes
+    else:
+        size_list = [size] * n
+
+    # 用 ';' 分隔每個按鈕的資料，整包以 __BUTTONS__ 前綴送出
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
+
+    try:
+        requests.post('http://localhost:5000/push', json={
+            'text':       f'__BUTTONS__{parts}',
+            'username':   username,
+            'session_id': session_id,
+            'log_path':   '',
+        })
+        print(f"[多按鈕] {labels}")
+    except Exception as e:
+        print(f"[多按鈕送出失敗] {e}")
 
 
 # ──────────────────────────────────────────
@@ -119,12 +168,9 @@ def main():
     send('在你準備好後，就按下開始吧！', delay=1)
 
     # ── 示範：發送按鈕，等待用戶點擊 ──
-    send_button('開始')                                    # 預設：金色、中等
-    # send_button('開始', color='green', size='large')    # 綠色、大
-    # send_button('略過', color='gray',  size='small')    # 灰色、小
-    # send_button('確認', color='blue',  size='medium')   # 藍色、中
+    send_buttons(['效度', '信度'], colors=['gray', 'blue'], size='small')
 
-    user_reply = wait_for_user()    # 等待用戶點擊按鈕
+    user_reply = wait_for_user()    # 回傳格式：'按鈕ID:按鈕文字'
     print(f"[用戶點擊] {user_reply}")
 
     send('好的，讓我們開始吧！', delay=1)
