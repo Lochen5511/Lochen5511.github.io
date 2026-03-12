@@ -63,8 +63,15 @@ def send(text: str, delay: float = 0):
 # ──────────────────────────────────────────
 # 工具函數：發送按鈕
 # ──────────────────────────────────────────
-def send_button(label: str, delay: float = 0):
-    """發送一個可點擊的按鈕，用戶點擊後視同發送該文字"""
+def send_button(label: str, delay: float = 0, color: str = 'gold', size: str = 'medium'):
+    """發送一個可點擊的按鈕
+    
+    參數：
+        label  : 按鈕文字
+        delay  : 等待秒數
+        color  : 顏色 'gold'（預設）| 'red' | 'green' | 'blue' | 'gray'
+        size   : 大小 'small' | 'medium'（預設）| 'large'
+    """
     if delay > 0:
         _set_thinking(True)
         time.sleep(delay)
@@ -72,12 +79,12 @@ def send_button(label: str, delay: float = 0):
 
     try:
         requests.post('http://localhost:5000/push', json={
-            'text':       f'__BUTTON__{label}',
+            'text':       f'__BUTTON__{label}||{color}||{size}',
             'username':   username,
             'session_id': session_id,
-            'log_path':   '',  # 按鈕本身不寫入 log
+            'log_path':   '',
         })
-        print(f"[按鈕] {label}")
+        print(f"[按鈕] {label} (color={color}, size={size})")
     except Exception as e:
         print(f"[按鈕送出失敗] {e}")
 
@@ -112,7 +119,10 @@ def main():
     send('在你準備好後，就按下開始吧！', delay=1)
 
     # ── 示範：發送按鈕，等待用戶點擊 ──
-    send_button('開始')
+    send_button('開始')                                    # 預設：金色、中等
+    # send_button('開始', color='green', size='large')    # 綠色、大
+    # send_button('略過', color='gray',  size='small')    # 灰色、小
+    # send_button('確認', color='blue',  size='medium')   # 藍色、中
 
     user_reply = wait_for_user()    # 等待用戶點擊按鈕
     print(f"[用戶點擊] {user_reply}")

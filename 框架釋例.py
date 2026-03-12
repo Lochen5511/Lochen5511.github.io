@@ -57,6 +57,12 @@ def main():
         send('很好！你掌握了效度的核心概念。', delay=1)
     else:
         send(f'你提到了「{user_reply}」，讓我們再深入討論一下。', delay=1)
+    
+    send_button('開始')                                  # 預設：金色、中等
+    send_button('開始', color='green', size='large')     # 綠色、大
+    send_button('略過', color='gray',  size='small')     # 灰色、小
+    send_button('確認', color='blue',  size='medium')    # 藍色、中
+    send_button('警告', color='red',   size='large')     # 紅色、大
 
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑

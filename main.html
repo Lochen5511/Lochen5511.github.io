@@ -238,29 +238,37 @@
     .btn-bubble {
       display: inline-block;
       margin-top: 6px;
-      padding: 10px 28px;
-      border: 1px solid var(--gold);
       border-radius: 8px;
       background: transparent;
-      color: var(--gold-light);
       font-family: 'Noto Serif TC', serif;
-      font-size: 14px;
       letter-spacing: 0.15em;
       cursor: pointer;
-      transition: background 0.2s, color 0.2s;
+      transition: background 0.2s, color 0.2s, transform 0.1s;
+      border: 1px solid;
     }
-    .btn-bubble:hover {
-      background: rgba(201,168,76,0.15);
-      color: var(--cream);
-    }
-    .btn-bubble:active {
-      transform: scale(0.97);
-    }
+    .btn-bubble:active { transform: scale(0.97); }
     .btn-bubble.used {
       opacity: 0.4;
       cursor: default;
       pointer-events: none;
     }
+
+    /* 大小 */
+    .btn-bubble.small  { padding: 6px 16px;  font-size: 12px; }
+    .btn-bubble.medium { padding: 10px 28px; font-size: 14px; }
+    .btn-bubble.large  { padding: 14px 40px; font-size: 17px; }
+
+    /* 顏色 */
+    .btn-bubble.gold  { border-color: var(--gold);  color: var(--gold-light); }
+    .btn-bubble.gold:hover  { background: rgba(201,168,76,0.15); color: var(--cream); }
+    .btn-bubble.green { border-color: #6abf69; color: #6abf69; }
+    .btn-bubble.green:hover { background: rgba(106,191,105,0.15); color: #c8f5c7; }
+    .btn-bubble.blue  { border-color: #6aaabf; color: #6aaabf; }
+    .btn-bubble.blue:hover  { background: rgba(106,170,191,0.15); color: #c7e8f5; }
+    .btn-bubble.red   { border-color: #bf6a6a; color: #bf6a6a; }
+    .btn-bubble.red:hover   { background: rgba(191,106,106,0.15); color: #f5c7c7; }
+    .btn-bubble.gray  { border-color: #888; color: #aaa; }
+    .btn-bubble.gray:hover  { background: rgba(136,136,136,0.15); color: #ddd; }
 
     .msg.user .msg-time { text-align: right; }
 
@@ -478,19 +486,22 @@
 
     // 判斷是否為按鈕訊息
     const isButton = text.startsWith('__BUTTON__');
-    const btnLabel = isButton ? text.replace('__BUTTON__', '') : '';
-
-    const div = document.createElement('div');
-    div.className = `msg ${role}`;
-
     let contentHtml = '';
+
     if (isButton) {
-      contentHtml = `<button class="btn-bubble" onclick="clickButton(this, '${btnLabel.replace(/'/g,"\\'")}')">
+      const parts    = text.replace('__BUTTON__', '').split('||');
+      const btnLabel = parts[0] || '';
+      const btnColor = parts[1] || 'gold';
+      const btnSize  = parts[2] || 'medium';
+      contentHtml = `<button class="btn-bubble ${btnColor} ${btnSize}" onclick="clickButton(this, '${btnLabel.replace(/'/g,"\\'")}')">
         ${escHtml(btnLabel)}
       </button>`;
     } else {
       contentHtml = `<div class="bubble">${escHtml(text)}</div>`;
     }
+
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
 
     div.innerHTML = `
       <div class="avatar-col">
