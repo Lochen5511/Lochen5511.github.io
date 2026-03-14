@@ -96,7 +96,7 @@ def main():
         labels     = ['效度', '信度'],
         colors     = ['gray', 'blue'],
         size       = 'small',
-        button_ids = ['btn_reliability', 'btn_reliability']
+        button_ids = ['validity.py', 'btn_reliability']
     )
 
     user_reply = wait_for_user()
@@ -107,8 +107,8 @@ def main():
     if 'btn_reliability' in user_reply:
         subprocess.Popen(['python', 'reliability.py'] + base_args,
                          cwd=os.path.dirname(os.path.abspath(__file__)))
-    elif 'btn_reliability' in user_reply:
-        subprocess.Popen(['python', 'reliability.py'] + base_args,
+    elif 'validity.py' in user_reply:
+        subprocess.Popen(['python', 'validity.py'] + base_args,
                          cwd=os.path.dirname(os.path.abspath(__file__)))
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑

@@ -621,6 +621,10 @@
     // 顯示用戶點擊紀錄
     appendMsg(label, 'user');
 
+    // 立即顯示思考動畫
+    if (thinkingBubble) { thinkingBubble.remove(); }
+    thinkingBubble = appendTyping();
+
     // 記錄至 log
     logMessage('user', `[按鈕:${buttonId}] ${label}`);
 
