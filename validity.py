@@ -1,278 +1,310 @@
-"""
-validity_analyze.py
-──────────────────
-接收 validity.py 蒐集的作答結果（results list），
-依規格執行計分、V2 pattern、LCI、訪談候選判定，
-並將分析結果寫入 log。
-
-使用方式（在 validity.py 末端呼叫）：
-    from validity_analyze import analyze
-    report = analyze(results, username, session_id, log_path)
-"""
+import argparse
+import time
+import requests
+import os
+from datetime import datetime
 
 # ──────────────────────────────────────────
-# 計分常數
+# 接收來自 button.py 的變數
 # ──────────────────────────────────────────
-POINT_STRONG_WRONG        = 0.6
-POINT_SUPPORT_WRONG       = 0.2
-HIGH_CONF_THRESHOLD       = 4
-POINT_HIGH_CONF_BONUS     = 0.1
-MAX_STRENGTH              = 1.0
+parser = argparse.ArgumentParser()
+parser.add_argument('--username',   default='未知')
+parser.add_argument('--session_id', default='')
+parser.add_argument('--log_path',   default='')
+args = parser.parse_args()
 
-V2A_SWAP_STRENGTH         = 0.9
-V2B_ALWAYS_TYPE_STRENGTH  = 0.7
-
-INTERVIEW_MIN_STRENGTH    = 0.7
-
-# evidence_weight 對照表
-EVIDENCE_WEIGHT = {
-    'V1_GATE': 'supporting',
-    'V1_1':    'supporting',
-    'V1_2':    'strong',
-    'V2_1':    'supporting',
-    'V2_2':    'supporting',
-    'VX_1':    'strong',
-    'V3_1':    'strong',
-    'V3_2':    'strong',
-}
-
-# V2 題組（不走單題加分）
-V2_ITEMS = {'V2_1', 'V2_2'}
-
-# 所有迷思代碼
-ALL_CODES = ['V1a', 'V1b', 'V1c', 'V2a', 'V2b', 'X1', 'V3a', 'V3b']
+username   = args.username
+session_id = args.session_id
+log_path   = args.log_path
 
 
 # ──────────────────────────────────────────
-# Step A：單題加分（非 V2）
+# 工具函數
 # ──────────────────────────────────────────
-def _step_a(results: list, strength: dict) -> dict:
-    """對非 V2 題目做逐題累加。"""
-    for r in results:
-        if r['item_id'] in V2_ITEMS:
-            continue
-        code = r.get('mistake_code')
-        if code is None:
-            continue
-        if r['is_correct']:
-            continue
+def _set_thinking(state):
+    try:
+        requests.post('http://localhost:5000/thinking', json={
+            'username': username, 'session_id': session_id, 'thinking': state})
+    except: pass
 
-        weight = EVIDENCE_WEIGHT.get(r['item_id'], 'supporting')
-        base   = POINT_STRONG_WRONG if weight == 'strong' else POINT_SUPPORT_WRONG
-        add    = base
-        if r['confidence'] >= HIGH_CONF_THRESHOLD:
-            add += POINT_HIGH_CONF_BONUS
+def send(text, delay=0):
+    if delay > 0:
+        _set_thinking(True); time.sleep(delay); _set_thinking(False)
+    try:
+        requests.post('http://localhost:5000/push', json={
+            'text': text, 'username': username,
+            'session_id': session_id, 'log_path': log_path})
+    except Exception as e:
+        print(f"[送出失敗] {e}")
 
-        strength[code] = min(MAX_STRENGTH, strength[code] + add)
+def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button_ids=None):
+    if delay > 0:
+        _set_thinking(True); time.sleep(delay); _set_thinking(False)
+    n = len(labels)
+    colors     = colors     or ['gold'] * n
+    button_ids = button_ids or labels
+    size_list  = sizes if sizes else [size] * n
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
+    try:
+        requests.post('http://localhost:5000/push', json={
+            'text': f'__BUTTONS__{parts}', 'username': username,
+            'session_id': session_id, 'log_path': ''})
+    except Exception as e:
+        print(f"[多按鈕失敗] {e}")
 
-    return strength
+def wait_for_user(interval=0.5):
+    while True:
+        try:
+            res = requests.get('http://localhost:5000/fetch_user_input',
+                               params={'session_id': session_id})
+            data = res.json()
+            if data.get('message'):
+                return data['message']
+        except: pass
+        time.sleep(interval)
 
-
-# ──────────────────────────────────────────
-# Step B：V2 pattern rule
-# ──────────────────────────────────────────
-def _step_b(results: list, strength: dict) -> tuple:
-    """
-    只看 V2_1 / V2_2 的答案組合。
-    回傳 (strength, v2_meta)：v2_meta 含 severity 旗標。
-    """
-    v2 = {r['item_id']: r for r in results if r['item_id'] in V2_ITEMS}
-    v2_meta = {'V2a_severity': None, 'V2b_severity': None, 'V2_uncertain': False}
-
-    if 'V2_1' not in v2 or 'V2_2' not in v2:
-        return strength, v2_meta
-
-    ans1 = v2['V2_1']['answer']   # A=同時, B=預測
-    ans2 = v2['V2_2']['answer']   # A=同時, B=預測
-    c1   = v2['V2_1']['confidence']
-    c2   = v2['V2_2']['confidence']
-
-    # V2a：顛倒型（V2_1=B 且 V2_2=A）
-    if ans1 == 'B' and ans2 == 'A':
-        strength['V2a'] = max(strength['V2a'], V2A_SWAP_STRENGTH)
-        if c1 >= HIGH_CONF_THRESHOLD or c2 >= HIGH_CONF_THRESHOLD:
-            v2_meta['V2a_severity'] = 'high'
-        # V2a 成立 → 不判 V2b
-        return strength, v2_meta
-
-    # V2b：永遠選同一類
-    if (ans1 == 'B' and ans2 == 'B') or (ans1 == 'A' and ans2 == 'A'):
-        strength['V2b'] = max(strength['V2b'], V2B_ALWAYS_TYPE_STRENGTH)
-        wrong_conf = []
-        if ans1 != 'A':  # V2_1 答對是 A
-            wrong_conf.append(c1)
-        if ans2 != 'B':  # V2_2 答對是 B
-            wrong_conf.append(c2)
-        if any(c >= HIGH_CONF_THRESHOLD for c in wrong_conf):
-            v2_meta['V2b_severity'] = 'high'
-        return strength, v2_meta
-
-    # 全對 (A, B)：不標
-    if ans1 == 'A' and ans2 == 'B':
-        return strength, v2_meta
-
-    # 其他組合：偶發錯誤，不硬貼迷思
-    v2_meta['V2_uncertain'] = True
-    return strength, v2_meta
+def write_log(content):
+    if not log_path:
+        return
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
 
 
 # ──────────────────────────────────────────
-# LCI 計算
+# 題庫（出題順序：V1_GATE→V2_1→V2_2→V1_1→VX_1→V1_2→V3_1→V3_2）
 # ──────────────────────────────────────────
-def _calc_lci(results: list) -> dict:
-    """
-    LCI = 100 * (0.6 * low_conf_ratio + 0.4 * (1 - (avg_conf - 1) / 4))
-    Hesitant Twin 標記：
-      Rule H1：LCI >= 70
-      Rule H2：avg_conf <= 2.6 且 low_conf_ratio >= 0.50
-    """
-    confs = [r['confidence'] for r in results]
-    n     = len(confs)
-    if n == 0:
-        return {}
+QUESTIONS = [
+    {
+        'item_id': 'V1_GATE',
+        'stem': (
+            '某位老師要為「國小五年級自然科單元測驗」命題。'
+            '她先把本單元的學習目標拆成幾個重點概念，並製作雙向細目表，'
+            '確保題目比例能覆蓋所有教學重點。命題完成後，她請同年段兩位自然科老師逐題審查，'
+            '確認題幹與選項是否符合教學目標、是否有偏題或遺漏。\n'
+            '請問上述做法最主要是在支持哪一種「效度證據」？'
+        ),
+        'options': {
+            'A': '表面效度：因為題目看起來像自然科題目，外觀合理即可',
+            'B': '內容效度：因為題目內容與教學目標、內容範圍的對應性被系統性檢核',
+            'C': '預測效度：因為這樣做可以讓分數更能預測學生下學期表現',
+            'D': '信度就等於效度：只要 Cronbach\'s alpha 很高，效度自然就高',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V1b', 'D': 'V1c'},
+    },
+    {
+        'item_id': 'V2_1',
+        'stem': (
+            '某研究者自編一份「國中閱讀理解測驗」，想檢查它是否能在同一個時間點反映學生的閱讀理解能力。'
+            '他讓同一批學生在同一週內同時完成：(1) 自編測驗；(2) 一份標準化閱讀測驗。'
+            '結果發現兩份測驗分數相關很高。\n'
+            '這種蒐集證據的做法，最主要是在檢驗哪一種效度？'
+        ),
+        'options': {
+            'A': '同時效度（criterion-related, concurrent）',
+            'B': '預測效度（criterion-related, predictive）',
+            'C': '內容效度（content-related）',
+            'D': '建構效度（construct-related）',
+        },
+        'key': 'A',
+        'option_to_code': {'A': None, 'B': 'V2a', 'C': 'V1b', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'V2_2',
+        'stem': (
+            '某教育單位設計一份「新生入學適應測驗」，希望用它來預測學生未來在校表現。'
+            '研究者在新生入學第一週施測，並在一年後蒐集同一批學生的 GPA 作為外在效標。'
+            '結果顯示入學適應測驗分數與一年後 GPA 顯著相關。\n'
+            '這種蒐集證據的做法，最主要是在檢驗哪一種效度？'
+        ),
+        'options': {
+            'A': '同時效度（concurrent）',
+            'B': '預測效度（predictive）',
+            'C': '內容效度（content）',
+            'D': '建構效度（construct）',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V2a', 'B': None, 'C': 'V1b', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'V1_1',
+        'stem': (
+            '一位導師設計了一份「學習動機量表」。許多同學一看題目就說：'
+            '「這些題目很像在問我想不想學，看起來很合理。」'
+            '但這份量表尚未經過專家審查，也尚未做任何統計分析。\n'
+            '請問同學們「看起來很合理」的這種評價，最接近下列哪一種？'
+        ),
+        'options': {
+            'A': '內容效度：因為大家覺得題目合理，所以內容效度已經建立',
+            'B': '表面效度：因為只是基於外觀直覺的合理感',
+            'C': '建構效度：因為只要題目看起來合理，就代表構念被驗證',
+            'D': '預測效度：因為看起來合理的量表通常就能預測未來表現',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V3a', 'D': 'V1b'},
+    },
+    {
+        'item_id': 'VX_1',
+        'stem': (
+            '以下關於「信度」與「效度」的敘述，何者最正確？\n'
+            '（注意：此題在考推理關係，而非名詞背誦。）'
+        ),
+        'options': {
+            'A': '只要信度高（例如 alpha 很高），就可以推論效度一定高',
+            'B': '只要效度高，就可以推論信度一定高',
+            'C': '信度是效度的必要但不充分條件：信度不足時效度不可能高，但信度高不保證效度高',
+            'D': '信度與效度完全無關；一個測驗可以同時信度很低但效度很高',
+        },
+        'key': 'C',
+        'option_to_code': {'A': 'X1', 'B': 'X1', 'C': None, 'D': 'X1'},
+    },
+    {
+        'item_id': 'V1_2',
+        'stem': (
+            '下列哪一項最能作為「內容效度」的合理證據？\n'
+            '（注意：題目在問「內容是否充分代表學習目標/內容範圍」的證據。）'
+        ),
+        'options': {
+            'A': '多數學生與家長覺得題目看起來很像這一科，所以應該有效',
+            'B': '命題者使用雙向細目表對應教學目標，並由同領域教師審題確認涵蓋範圍與比例',
+            'C': '施測後發現分數與「一年後的學業成績」高度相關，所以內容效度很高',
+            'D': '試測後 Cronbach\'s alpha 達到 .92，因此可直接判定效度很高',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V1b', 'D': 'V1c'},
+    },
+    {
+        'item_id': 'V3_1',
+        'stem': (
+            '研究者發展一份「數位素養量表」，理論上包含三個構面：資訊搜尋、資訊評估、以及數位溝通。'
+            '為了檢驗題目是否真的形成這三個構面，研究者進行因素分析，'
+            '檢查題項是否依預期聚集成三個因素，以及模型配適是否合理。\n'
+            '上述做法主要在蒐集哪一種效度證據？'
+        ),
+        'options': {
+            'A': '內容效度：因為只要題目被分成幾個因素，就代表內容涵蓋完整',
+            'B': '建構效度：因為因素分析是在檢驗題目是否反映理論構念結構',
+            'C': '表面效度：因為題目看起來合理，所以構面也會合理',
+            'D': '預測效度：因為因素分析等於在預測外在效標',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V3a', 'B': None, 'C': 'V1a', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'V3_2',
+        'stem': (
+            '研究者想驗證一份「學習自我效能量表」是否真的測到自我效能。'
+            '他同時施測：(1) 新的自我效能量表；(2) 應高度相關的「學習動機量表」；'
+            '(3) 應較不相關的「外向性人格量表」。\n'
+            '結果：自我效能量表與學習動機量表呈高度正相關，但與外向性人格量表相關很低。\n'
+            '上述結果最能支持哪一種效度證據？'
+        ),
+        'options': {
+            'A': '內容效度：因為相關高低代表內容涵蓋程度',
+            'B': '建構效度（聚斂/區別效度）：因為結果符合理論預期的相關模式',
+            'C': '同時效度：因為只要同一時間點有相關，就屬同時效度',
+            'D': '重測信度：因為相關高代表量表穩定',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V3a', 'B': None, 'C': 'V3b', 'D': 'V1c'},
+    },
+]
 
-    avg_conf       = sum(confs) / n
-    low_conf_ratio = sum(1 for c in confs if c <= 2) / n
-    lci            = 100 * (0.6 * low_conf_ratio + 0.4 * (1 - (avg_conf - 1) / 4))
-    lci            = round(min(100.0, max(0.0, lci)), 2)
 
-    hesitant = (lci >= 70) or (avg_conf <= 2.6 and low_conf_ratio >= 0.50)
+# ──────────────────────────────────────────
+# 出題流程
+# ──────────────────────────────────────────
+def ask_question(q, index, total):
+    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=1)
 
-    # 副標籤
-    acc               = sum(1 for r in results if r['is_correct']) / n
-    high_conf_wrong   = sum(1 for r in results
-                            if not r['is_correct'] and r['confidence'] >= HIGH_CONF_THRESHOLD)
-    hesitant_subtype  = None
-    if hesitant:
-        if acc >= 0.75 and high_conf_wrong == 0:
-            if avg_conf <= 2.2 and low_conf_ratio >= 0.75:
-                hesitant_subtype = 'LC_GUESS'
-            else:
-                hesitant_subtype = 'LC_KNOWS'
+    time.sleep(0.3)
+    send_buttons(
+        labels     = [f'{k}. {v}' for k, v in q['options'].items()],
+        colors     = ['gold', 'gold', 'gold', 'gold'],
+        size       = 'medium',
+        button_ids = [f'ans_{k}' for k in q['options'].keys()]
+    )
 
-    hesitation_level    = round(lci / 100, 3)
-    intuition_intrusion = round(max(0.0, min(1.0, (lci - 50) / 50)), 3)
+    ans_reply  = wait_for_user()
+    chosen_key = ans_reply.split(':')[0].replace('ans_', '').strip()
+    print(f"[作答] item={q['item_id']} answer={chosen_key}")
+
+    time.sleep(0.3)
+    send('請評估你對這個答案的把握度：', delay=0)
+    time.sleep(0.3)
+    send_buttons(
+        labels     = ['1 分', '2 分', '3 分', '4 分', '5 分'],
+        colors     = ['gray', 'gray', 'gold', 'gold', 'gold'],
+        size       = 'small',
+        button_ids = ['conf_1', 'conf_2', 'conf_3', 'conf_4', 'conf_5']
+    )
+
+    conf_reply = wait_for_user()
+    confidence = int(conf_reply.split(':')[0].replace('conf_', '').strip())
+    print(f"[信心] item={q['item_id']} confidence={confidence}")
+
+    is_correct   = (chosen_key == q['key'])
+    mistake_code = q['option_to_code'].get(chosen_key)
+
+    write_log(
+        f'[{q["item_id"]}] '
+        f'answer={chosen_key} | '
+        f'is_correct={is_correct} | '
+        f'confidence={confidence} | '
+        f'mistake_code={mistake_code if mistake_code else "none"}'
+    )
 
     return {
-        'LCI_score':           lci,
-        'avg_conf':            round(avg_conf, 2),
-        'low_conf_ratio':      round(low_conf_ratio, 2),
-        'twin_tag_hesitant':   hesitant,
-        'hesitant_subtype':    hesitant_subtype,
-        'hesitation_level':    hesitation_level,
-        'intuition_intrusion': intuition_intrusion,
+        'item_id':      q['item_id'],
+        'answer':       chosen_key,
+        'is_correct':   is_correct,
+        'confidence':   confidence,
+        'mistake_code': mistake_code,
     }
 
 
 # ──────────────────────────────────────────
-# 訪談候選判定
+# 主要執行區塊
 # ──────────────────────────────────────────
-def _interview_candidates(strength: dict, results: list, v2_meta: dict) -> list:
-    """
-    候選條件（任一成立）：
-    1. strength[code] >= 0.7
-    2. 有「高把握度錯」觸發該 code
-    3. code 是 V2a 或 X1
-    """
-    # 建立「哪些 code 有高把握度錯」的集合
-    high_conf_wrong_codes = set()
-    for r in results:
-        if not r['is_correct'] and r['confidence'] >= HIGH_CONF_THRESHOLD:
-            code = r.get('mistake_code')
-            if code:
-                high_conf_wrong_codes.add(code)
+def main():
+    total   = len(QUESTIONS)
+    results = []
 
-    candidates = []
-    for code in ALL_CODES:
-        s = strength.get(code, 0)
-        reasons = []
-        if s >= INTERVIEW_MIN_STRENGTH:
-            reasons.append(f'strength={s:.2f}')
-        if code in high_conf_wrong_codes:
-            reasons.append('high_conf_wrong')
-        if code in ('V2a', 'X1') and s > 0:
-            reasons.append(f'priority_code')
-        if reasons:
-            candidates.append({'code': code, 'strength': s, 'reasons': reasons})
+    send('好的，現在開始效度概念的快篩題組，共 8 題。', delay=1)
+    send('每題作答後，請同時評估你的把握度（1–5 分）。', delay=1)
 
-    return candidates
+    for i, q in enumerate(QUESTIONS, start=1):
+        result = ask_question(q, i, total)
+        results.append(result)
+        time.sleep(0.5)
 
+    correct_count = sum(1 for r in results if r['is_correct'])
+    avg_conf      = sum(r['confidence'] for r in results) / total
+    mistake_codes = [r['mistake_code'] for r in results if r['mistake_code']]
 
-# ──────────────────────────────────────────
-# 主分析函數
-# ──────────────────────────────────────────
-def analyze(results: list, username: str, session_id: str, log_path: str) -> dict:
-    """
-    輸入：validity.py 每題回傳的 dict list，格式：
-        [{'item_id', 'answer', 'is_correct', 'confidence', 'mistake_code'}, ...]
-    輸出：完整分析 report dict，並寫入 log。
-    """
-    # 初始化
-    strength = {code: 0.0 for code in ALL_CODES}
+    summary = (
+        f'題組完成！共答對 {correct_count}/{total} 題，'
+        f'平均把握度 {avg_conf:.1f} 分。'
+    )
+    send(summary, delay=1)
 
-    # Step A：單題加分（非 V2）
-    strength = _step_a(results, strength)
+    write_log(
+        f'[摘要] correct={correct_count}/{total} | '
+        f'avg_confidence={avg_conf:.2f} | '
+        f'mistakes={mistake_codes}'
+    )
 
-    # Step B：V2 pattern
-    strength, v2_meta = _step_b(results, strength)
+    from validity_analyze import analyze
+    analyze(results, username, session_id, log_path)
 
-    # LCI
-    lci_data = _calc_lci(results)
-
-    # 訪談候選
-    interview = _interview_candidates(strength, results, v2_meta)
-
-    # 整體正確率
-    acc = sum(1 for r in results if r['is_correct']) / len(results) if results else 0
-
-    report = {
-        'username':    username,
-        'session_id':  session_id,
-        'accuracy':    round(acc, 3),
-        'strength':    {k: round(v, 3) for k, v in strength.items()},
-        'v2_meta':     v2_meta,
-        'lci':         lci_data,
-        'interview_candidates': interview,
-    }
-
-    # 寫入 log
-    if log_path:
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write('\n\n── 效度分析報告 ──\n')
-                f.write(f'正確率：{acc:.1%}\n')
-                f.write('迷思強度：\n')
-                for code, val in strength.items():
-                    if val > 0:
-                        f.write(f'  {code}: {val:.2f}\n')
-                f.write(f'V2 meta：{v2_meta}\n')
-                f.write(f'LCI：{lci_data.get("LCI_score", "N/A")} | '
-                        f'猶豫型孿生：{lci_data.get("twin_tag_hesitant", False)} | '
-                        f'subtype：{lci_data.get("hesitant_subtype")}\n')
-                if interview:
-                    codes_str = ', '.join(c['code'] for c in interview)
-                    f.write(f'訪談候選：{codes_str}\n')
-                f.write('──────────────────\n')
-        except Exception as e:
-            print(f"[log 寫入失敗] {e}")
-
-    print(f"[validity_analyze] 分析完成：acc={acc:.1%} | "
-          f"interview={[c['code'] for c in interview]}")
-    return report
+    print(f"[validity.py 執行完畢] {summary}")
 
 
 if __name__ == '__main__':
-    # 測試用：模擬一組作答結果
-    test_results = [
-        {'item_id': 'V1_GATE', 'answer': 'A', 'is_correct': False, 'confidence': 4, 'mistake_code': 'V1a'},
-        {'item_id': 'V2_1',    'answer': 'B', 'is_correct': False, 'confidence': 3, 'mistake_code': 'V2a'},
-        {'item_id': 'V2_2',    'answer': 'A', 'is_correct': False, 'confidence': 3, 'mistake_code': 'V2a'},
-        {'item_id': 'V1_1',    'answer': 'B', 'is_correct': True,  'confidence': 2, 'mistake_code': None},
-        {'item_id': 'VX_1',    'answer': 'A', 'is_correct': False, 'confidence': 5, 'mistake_code': 'X1'},
-        {'item_id': 'V1_2',    'answer': 'B', 'is_correct': True,  'confidence': 2, 'mistake_code': None},
-        {'item_id': 'V3_1',    'answer': 'A', 'is_correct': False, 'confidence': 2, 'mistake_code': 'V3a'},
-        {'item_id': 'V3_2',    'answer': 'B', 'is_correct': True,  'confidence': 1, 'mistake_code': None},
-    ]
-    report = analyze(test_results, 'test_user', 'test_session', '')
-    import json
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    main()
