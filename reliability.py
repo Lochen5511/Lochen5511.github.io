@@ -92,7 +92,6 @@ def main():
     send_alert('很抱歉，此單元尚在開發中，請返回選擇其他選項。')
 
     # 彈出視窗關閉後，重新發送選擇按鈕
-    time.sleep(0.5)
     send_buttons(
         labels     = ['效度', '信度'],
         colors     = ['gray', 'blue'],

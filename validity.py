@@ -1,8 +1,8 @@
 import argparse
 import time
 import requests
-from datetime import datetime
 import os
+from datetime import datetime
 
 # ──────────────────────────────────────────
 # 接收來自 button.py 的變數
@@ -19,7 +19,7 @@ log_path   = args.log_path
 
 
 # ──────────────────────────────────────────
-# 工具函數（與 button.py 相同）
+# 工具函數
 # ──────────────────────────────────────────
 def _set_thinking(state):
     try:
@@ -60,10 +60,13 @@ def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button
     if delay > 0:
         _set_thinking(True); time.sleep(delay); _set_thinking(False)
     n = len(labels)
-    colors = colors or ['gold'] * n
+    colors     = colors     or ['gold'] * n
     button_ids = button_ids or labels
-    size_list = sizes if sizes else [size] * n
-    parts = ';'.join(f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}' for i in range(n))
+    size_list  = sizes if sizes else [size] * n
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
     try:
         requests.post('http://localhost:5000/push', json={
             'text': f'__BUTTONS__{parts}', 'username': username,
@@ -82,38 +85,252 @@ def wait_for_user(interval=0.5):
         except: pass
         time.sleep(interval)
 
+def write_log(content: str):
+    """直接寫入一行到 log"""
+    if not log_path:
+        return
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
+
+
+# ──────────────────────────────────────────
+# 題庫
+# ──────────────────────────────────────────
+QUESTIONS = [
+    {
+        'item_id': 'V1_GATE',
+        'stem': (
+            '某位老師要為「國小五年級自然科單元測驗」命題。'
+            '她先把本單元的學習目標拆成幾個重點概念，並製作雙向細目表（把「內容範圍」與「認知層次」交叉），'
+            '確保題目比例能覆蓋所有教學重點。命題完成後，她請同年段兩位自然科老師逐題審查，'
+            '確認題幹與選項是否符合教學目標、是否有偏題或遺漏。\n'
+            '請問上述做法最主要是在支持哪一種「效度證據」？'
+        ),
+        'options': {
+            'A': '表面效度：因為題目看起來像自然科題目，外觀合理即可',
+            'B': '內容效度：因為題目內容與教學目標、內容範圍的對應性被系統性檢核',
+            'C': '預測效度：因為這樣做可以讓分數更能預測學生下學期表現',
+            'D': '信度（內部一致性）就等於效度：只要 Cronbach\'s α 很高，效度自然就高',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V1b', 'D': 'V1c'},
+    },
+    {
+        'item_id': 'V1_1',
+        'stem': (
+            '一位導師設計了一份「學習動機量表」。許多同學一看題目就說：'
+            '「這些題目很像在問我想不想學、會不會努力，看起來很合理。」'
+            '但這份量表目前尚未經過專家審查題項是否涵蓋動機的理論構面，'
+            '也尚未做任何統計分析（例如因素分析或與相關量表的關聯檢驗）。\n'
+            '請問同學們「看起來很合理、很像在測學習動機」的這種評價，最接近下列哪一種？'
+        ),
+        'options': {
+            'A': '內容效度：因為大家覺得題目合理，所以內容效度已經建立',
+            'B': '表面效度：因為只是基於外觀直覺的合理感',
+            'C': '建構效度：因為只要題目看起來合理，就代表構念被驗證',
+            'D': '預測效度：因為看起來合理的量表通常就能預測未來表現',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V3a', 'D': 'V1b'},
+    },
+    {
+        'item_id': 'V1_2',
+        'stem': (
+            '下列哪一項最能作為「內容效度」的合理證據？\n'
+            '（注意：題目在問的是「內容是否充分代表學習目標/內容範圍」的證據。）'
+        ),
+        'options': {
+            'A': '多數學生與家長覺得題目看起來很像這一科、很順眼，所以應該有效',
+            'B': '命題者使用雙向細目表對應教學目標，並由同領域教師審題確認題目涵蓋範圍與比例',
+            'C': '施測後發現分數與「一年後的學業成績」高度相關，所以內容效度很高',
+            'D': '試測後 Cronbach\'s α 達到 .92，因此可直接判定效度很高',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V1a', 'B': None, 'C': 'V1b', 'D': 'V1c'},
+    },
+    {
+        'item_id': 'V2_1',
+        'stem': (
+            '某研究者自編一份「國中閱讀理解測驗」，想檢查它是否能在同一個時間點反映學生的閱讀理解能力。'
+            '他讓同一批學生在同一週內同時完成兩個測驗：'
+            '(1) 研究者自編的閱讀理解測驗；(2) 一份已廣泛使用、被認為品質良好的標準化閱讀測驗。'
+            '結果發現兩份測驗分數相關很高。\n'
+            '這種蒐集證據的做法，最主要是在檢驗哪一種效度？'
+        ),
+        'options': {
+            'A': '同時效度（criterion-related, concurrent）',
+            'B': '預測效度（criterion-related, predictive）',
+            'C': '內容效度（content-related）',
+            'D': '建構效度（construct-related）',
+        },
+        'key': 'A',
+        'option_to_code': {'A': None, 'B': 'V2a', 'C': 'V1b', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'V2_2',
+        'stem': (
+            '某教育單位設計一份「新生入學適應測驗」，希望用它來預測學生未來在校表現。'
+            '研究者在新生入學第一週施測，並在一年後蒐集同一批學生的 GPA 或學業成績作為外在效標。'
+            '結果顯示入學適應測驗分數與一年後 GPA 顯著相關。\n'
+            '這種蒐集證據的做法，最主要是在檢驗哪一種效度？'
+        ),
+        'options': {
+            'A': '同時效度（concurrent）',
+            'B': '預測效度（predictive）',
+            'C': '內容效度（content）',
+            'D': '建構效度（construct）',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V2a', 'B': None, 'C': 'V1b', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'VX_1',
+        'stem': (
+            '以下關於「信度」與「效度」的敘述，何者最正確？\n'
+            '（注意：此題在考推理關係，而非名詞背誦。）'
+        ),
+        'options': {
+            'A': '只要信度高（例如 α 很高），就可以推論效度一定高',
+            'B': '只要效度高，就可以推論信度一定高',
+            'C': '信度是效度的必要但不充分條件：信度不足時效度不可能高，但信度高不保證效度高',
+            'D': '信度與效度完全無關；一個測驗可以同時信度很低但效度很高',
+        },
+        'key': 'C',
+        'option_to_code': {'A': 'X1', 'B': 'X1', 'C': None, 'D': 'X1'},
+    },
+    {
+        'item_id': 'V3_1',
+        'stem': (
+            '研究者發展一份「數位素養量表」，理論上包含三個構面：資訊搜尋、資訊評估、以及數位溝通。'
+            '為了檢驗題目是否真的形成這三個構面，研究者蒐集大量樣本後進行（探索性或驗證性）因素分析，'
+            '檢查題項是否依預期聚集成三個因素，以及模型配適是否合理。\n'
+            '上述做法主要在蒐集哪一種效度證據？'
+        ),
+        'options': {
+            'A': '內容效度：因為只要題目被分成幾個因素，就代表內容涵蓋完整',
+            'B': '建構效度：因為因素分析是在檢驗題目是否反映理論構念結構',
+            'C': '表面效度：因為題目看起來合理，所以構面也會合理',
+            'D': '預測效度：因為因素分析等於在預測外在效標',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V3a', 'B': None, 'C': 'V1a', 'D': 'V3b'},
+    },
+    {
+        'item_id': 'V3_2',
+        'stem': (
+            '研究者想驗證一份「學習自我效能量表」是否真的測到自我效能。'
+            '他同時施測三份量表：'
+            '(1) 新的自我效能量表；(2) 理論上應高度相關的「學習動機量表」；'
+            '(3) 理論上應較不相關的「外向性人格量表」。\n'
+            '結果顯示：新的自我效能量表與學習動機量表呈高度正相關，但與外向性人格量表相關很低。\n'
+            '上述結果最能支持哪一種效度證據？'
+        ),
+        'options': {
+            'A': '內容效度：因為相關高低代表內容涵蓋程度',
+            'B': '建構效度（聚斂/區別效度）：因為結果符合理論預期的相關模式',
+            'C': '同時效度：因為只要同一時間點有相關，就屬同時效度',
+            'D': '重測信度：因為相關高代表量表穩定',
+        },
+        'key': 'B',
+        'option_to_code': {'A': 'V3a', 'B': None, 'C': 'V3b', 'D': 'V1c'},
+    },
+]
+
+
+# ──────────────────────────────────────────
+# 出題流程
+# ──────────────────────────────────────────
+def ask_question(q, index, total):
+    """發送一題，等待選項 + 信心分數，回傳 dict"""
+
+    # 題號 + 題幹
+    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=1)
+
+    # 四個選項按鈕
+    time.sleep(0.3)
+    send_buttons(
+        labels     = [f'{k}. {v}' for k, v in q['options'].items()],
+        colors     = ['gold', 'gold', 'gold', 'gold'],
+        size       = 'medium',
+        button_ids = [f'ans_{k}' for k in q['options'].keys()]
+    )
+
+    # 等待選項
+    ans_reply = wait_for_user()
+    # ans_reply 格式：'ans_B:B. 內容效度：...'
+    chosen_key = ans_reply.split(':')[0].replace('ans_', '').strip()
+    print(f"[作答] item={q['item_id']} answer={chosen_key}")
+
+    # 發送信心分數按鈕
+    time.sleep(0.3)
+    send('請評估你對這個答案的把握度：', delay=0)
+    time.sleep(0.3)
+    send_buttons(
+        labels     = ['1 分', '2 分', '3 分', '4 分', '5 分'],
+        colors     = ['gray', 'gray', 'gold', 'gold', 'gold'],
+        size       = 'small',
+        button_ids = ['conf_1', 'conf_2', 'conf_3', 'conf_4', 'conf_5']
+    )
+
+    # 等待信心分數
+    conf_reply = wait_for_user()
+    # conf_reply 格式：'conf_3:3 分'
+    confidence = conf_reply.split(':')[0].replace('conf_', '').strip()
+    print(f"[信心] item={q['item_id']} confidence={confidence}")
+
+    # 判斷對錯與迷思代碼
+    is_correct   = (chosen_key == q['key'])
+    mistake_code = q['option_to_code'].get(chosen_key)
+
+    # 寫入 log
+    write_log(
+        f'[{q["item_id"]}] '
+        f'answer={chosen_key} | '
+        f'is_correct={is_correct} | '
+        f'confidence={confidence} | '
+        f'mistake_code={mistake_code if mistake_code else "none"}'
+    )
+
+    return {
+        'item_id':      q['item_id'],
+        'answer':       chosen_key,
+        'is_correct':   is_correct,
+        'confidence':   int(confidence),
+        'mistake_code': mistake_code,
+    }
+
 
 # ──────────────────────────────────────────
 # 主要執行區塊
 # ──────────────────────────────────────────
 def main():
-    # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
+    total   = len(QUESTIONS)
+    results = []
 
-    send_alert('很抱歉，此單元尚在開發中，請返回選擇其他選項。')
+    send('好的，現在開始效度概念的快篩題組，共 8 題。', delay=0.5)
+    send('每題作答後，請同時評估你的把握度（1–5 分）。', delay=0.5)
 
-    # 彈出視窗關閉後，重新發送選擇按鈕
-    time.sleep(0.5)
-    send_buttons(
-        labels     = ['效度', '信度'],
-        colors     = ['gray', 'blue'],
-        size       = 'small',
-        button_ids = ['btn_validity', 'btn_reliability']
+    for i, q in enumerate(QUESTIONS, start=1):
+        result = ask_question(q, i, total)
+        results.append(result)
+        time.sleep(0.5)
+
+    # 全部完成，統計摘要
+    correct_count = sum(1 for r in results if r['is_correct'])
+    avg_conf      = sum(r['confidence'] for r in results) / total
+    mistake_codes = [r['mistake_code'] for r in results if r['mistake_code']]
+
+    summary = (
+        f'題組完成！共答對 {correct_count}/{total} 題，'
+        f'平均把握度 {avg_conf:.1f} 分。'
     )
+    send(summary, delay=1)
 
-    user_reply = wait_for_user()
-    print(f"[用戶點擊] {user_reply}")
-
-    import subprocess
-    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
-    if 'btn_validity' in user_reply:
-        subprocess.Popen(['python', 'validity.py'] + base_args,
-                         cwd=os.path.dirname(os.path.abspath(__file__)))
-    elif 'btn_reliability' in user_reply:
-        subprocess.Popen(['python', 'reliability.py'] + base_args,
-                         cwd=os.path.dirname(os.path.abspath(__file__)))
-
-    # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
-    print("[validity.py 執行完畢]")
+    write_log(f'[摘要] correct={correct_count}/{total} | avg_confidence={avg_conf:.2f} | mistakes={mistake_codes}')
+    print(f"[validity.py 執行完畢] {summary}")
 
 
 if __name__ == '__main__':
