@@ -153,6 +153,12 @@ def send_alert(message: str):
         print(f"[彈出視窗] {message}")
     except Exception as e:
         print(f"[alert 送出失敗] {e}")
+
+
+# ──────────────────────────────────────────
+# 工具函數：等待用戶回應
+# ──────────────────────────────────────────
+def wait_for_user(interval: float = 0.5) -> str:
     """阻塞直到用戶發送訊息或點擊按鈕，回傳用戶說的話"""
     while True:
         try:
