@@ -141,7 +141,18 @@ def send_buttons(labels: list, delay: float = 0, colors: list = None, sizes: lis
 # ──────────────────────────────────────────
 # 工具函數：等待用戶回應
 # ──────────────────────────────────────────
-def wait_for_user(interval: float = 0.5) -> str:
+def send_alert(message: str):
+    """在網頁上彈出提示視窗"""
+    try:
+        requests.post('http://localhost:5000/push', json={
+            'text':       f'__ALERT__{message}',
+            'username':   username,
+            'session_id': session_id,
+            'log_path':   '',
+        })
+        print(f"[彈出視窗] {message}")
+    except Exception as e:
+        print(f"[alert 送出失敗] {e}")
     """阻塞直到用戶發送訊息或點擊按鈕，回傳用戶說的話"""
     while True:
         try:
@@ -161,19 +172,35 @@ def wait_for_user(interval: float = 0.5) -> str:
 def main():
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
-    send(f'你好，{username}！我是艾評。', delay=10)
-    send('歡迎來到本系統。', delay=2)
-    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=3)
+    send(f'你好，{username}！我是艾評。', delay=3)
+    send('歡迎來到本系統。', delay=1)
+    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=1)
     send('待會，你會完成8題選擇題，每次作答後，評價自己對這個答案的信心。', delay=2)
     send('在你準備好後，就按下開始吧！', delay=1)
 
-    # ── 示範：發送按鈕，等待用戶點擊 ──
-    send_buttons(['效度', '信度'], colors=['gray', 'blue'], size='small')
+    send_buttons(
+        labels     = ['效度', '信度'],
+        colors     = ['gray', 'blue'],
+        size       = 'small',
+        button_ids = ['btn_validity', 'btn_reliability']
+    )
 
-    user_reply = wait_for_user()    # 回傳格式：'按鈕ID:按鈕文字'
+    user_reply = wait_for_user()
     print(f"[用戶點擊] {user_reply}")
 
-    send('好的，讓我們開始吧！', delay=1)
+    # ── 根據按鈕 ID 執行不同的 py 檔 ──
+    import subprocess, os
+    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
+
+    if 'btn_validity' in user_reply:
+        # 接口一：效度 → validity.py
+        subprocess.Popen(['python', 'validity.py'] + base_args,
+                         cwd=os.path.dirname(os.path.abspath(__file__)))
+
+    elif 'btn_reliability' in user_reply:
+        # 接口二：信度 → reliability.py
+        subprocess.Popen(['python', 'reliability.py'] + base_args,
+                         cwd=os.path.dirname(os.path.abspath(__file__)))
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
     print("[button.py 執行完畢]")

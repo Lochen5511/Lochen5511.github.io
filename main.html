@@ -387,6 +387,63 @@
       opacity: 0.6;
     }
 
+    /* ── 彈出視窗 ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.show {
+      display: flex;
+      animation: fadeIn 0.25s ease;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px 40px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+      animation: scaleIn 0.25s cubic-bezier(0.22,1,0.36,1);
+    }
+    .modal-icon {
+      font-size: 28px;
+      margin-bottom: 14px;
+    }
+    .modal-msg {
+      font-family: 'Noto Serif TC', serif;
+      font-size: 15px;
+      font-weight: 300;
+      color: var(--cream);
+      line-height: 1.8;
+      letter-spacing: 0.04em;
+      margin-bottom: 28px;
+    }
+    .modal-close {
+      padding: 10px 32px;
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--gold-light);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .modal-close:hover {
+      background: rgba(201,168,76,0.15);
+      color: var(--cream);
+    }
+    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
     /* ── 動畫 ── */
     @keyframes fadeDown {
       from { opacity: 0; transform: translateY(-12px); }
@@ -408,6 +465,15 @@
 <body>
 
 <div class="app">
+
+  <!-- 彈出視窗 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <div class="modal-icon">⚠</div>
+      <p class="modal-msg" id="modalMsg"></p>
+      <button class="modal-close" onclick="closeModal()">確認</button>
+    </div>
+  </div>
 
   <!-- 頂部 -->
   <header>
@@ -498,16 +564,18 @@
     let contentHtml = '';
 
     if (isButtons) {
-      // 多按鈕並排
+      // 多按鈕並排，加上同一個 group-id 讓點擊時整組失效
+      const groupId = 'btngroup_' + Date.now();
       const parts = text.replace('__BUTTONS__', '').split(';');
       const btns = parts.map(p => {
         const [btnLabel, btnColor, btnSize, btnId] = p.split('||');
         return `<button class="btn-bubble ${btnColor||'gold'} ${btnSize||'medium'}"
-          onclick="clickButton(this, '${(btnLabel||'').replace(/'/g,"\\'")}', '${(btnId||btnLabel||'').replace(/'/g,"\\'")}')">
+          data-group="${groupId}"
+          onclick="clickButton(this, '${(btnLabel||'').replace(/'/g,"\\'")}', '${(btnId||btnLabel||'').replace(/'/g,"\\'")}', '${groupId}')">
           ${escHtml(btnLabel||'')}
         </button>`;
       }).join('');
-      contentHtml = `<div class="btn-row">${btns}</div>`;
+      contentHtml = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
     } else if (isButton) {
       const parts    = text.replace('__BUTTON__', '').split('||');
       const btnLabel = parts[0] || '';
@@ -539,18 +607,24 @@
     return div;
   }
 
-  function clickButton(btn, label, buttonId) {
-    // 標記為已使用
-    btn.classList.add('used');
+  function clickButton(btn, label, buttonId, groupId) {
+    // 若有 groupId，整組按鈕都失效
+    if (groupId) {
+      document.querySelectorAll(`[data-group="${groupId}"]`).forEach(b => {
+        b.classList.add('used');
+      });
+    } else {
+      btn.classList.add('used');
+    }
     btn.textContent = '✓ ' + label;
 
     // 顯示用戶點擊紀錄
     appendMsg(label, 'user');
 
-    // 記錄至 log（格式：按鈕:ID:文字）
+    // 記錄至 log
     logMessage('user', `[按鈕:${buttonId}] ${label}`);
 
-    // 送至後端（讓 wait_for_user() 收到）
+    // 送至後端
     fetch('http://localhost:5000/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -589,6 +663,15 @@
 
   const sessionId = sessionStorage.getItem('sessionId') || '';
 
+  function showModal(msg) {
+    document.getElementById('modalMsg').textContent = msg;
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+
   let thinkingBubble = null;
 
   // 每秒輪詢一次，取出 button.py 推送的訊息
@@ -598,10 +681,13 @@
       const data = await res.json();
 
       if (data.message) {
-        // 有新訊息：移除思考氣泡，顯示訊息
-        if (thinkingBubble) { thinkingBubble.remove(); thinkingBubble = null; }
-        appendMsg(data.message, 'ai');
-        logMessage('ai', data.message);
+        thinkingBubble && (thinkingBubble.remove(), thinkingBubble = null);
+        if (data.message.startsWith('__ALERT__')) {
+          showModal(data.message.replace('__ALERT__', ''));
+        } else {
+          appendMsg(data.message, 'ai');
+          logMessage('ai', data.message);
+        }
       } else if (data.thinking && !thinkingBubble) {
         // 開始思考：顯示思考氣泡
         thinkingBubble = appendTyping();
