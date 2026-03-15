@@ -91,6 +91,8 @@ def push():
 
     # 放進隊列
     message_queues[session_id].append(text)
+    print(f"[PUSH] session_id='{session_id}' text='{text[:30]}'")
+    print(f"[PUSH] 目前所有隊列：{ {k: len(v) for k, v in message_queues.items()} }")
 
     # 同步寫入 log
     if log_path:
@@ -110,6 +112,7 @@ def poll():
     session_id  = request.args.get('session_id', '')
     queue       = message_queues.get(session_id, [])
     is_thinking = thinking_states.get(session_id, False)
+    print(f"[POLL] session_id='{session_id}' queue_len={len(queue)}")
 
     if queue:
         text = queue.pop(0)
