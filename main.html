@@ -683,7 +683,9 @@
   // 每秒輪詢一次，取出 button.py 推送的訊息
   setInterval(async () => {
     try {
-      const res = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
+      const res = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`, {
+        headers: { 'bypass-tunnel-reminder': 'true' }
+      });
       const data = await res.json();
 
       if (data.message) {
