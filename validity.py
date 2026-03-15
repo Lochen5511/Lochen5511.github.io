@@ -301,7 +301,9 @@ def main():
     )
 
     from validity_analyze import analyze
-    analyze(results, username, session_id, log_path)
+    from final_va import export
+    report = analyze(results, username, session_id, log_path)
+    export(report, results, username, session_id, log_path)
 
     print(f"[validity.py 執行完畢] {summary}")
 
