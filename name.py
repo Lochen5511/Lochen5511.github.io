@@ -37,6 +37,11 @@ thinking_states = {}
 user_input_queues = defaultdict(list)
 
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({'status': 'ok'}), 200
+
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """接收用戶訊息，轉入 button.py 的等待隊列"""
@@ -63,9 +68,11 @@ def chat():
     return jsonify({'reply': ''})
 
 
-@app.route('/fetch_user_input', methods=['GET'])
+@app.route('/fetch_user_input', methods=['GET', 'OPTIONS'])
 def fetch_user_input():
     """button.py 輪詢此端點，等待用戶輸入"""
+    if request.method == 'OPTIONS':
+        return '', 200
     session_id = request.args.get('session_id', '')
     queue = user_input_queues.get(session_id, [])
     if queue:
@@ -109,9 +116,11 @@ def push():
     return jsonify({'success': True})
 
 
-@app.route('/poll', methods=['GET'])
+@app.route('/poll', methods=['GET', 'OPTIONS'])
 def poll():
     """main.html 定期呼叫此端點，取出最新一則訊息"""
+    if request.method == 'OPTIONS':
+        return '', 200
     session_id = request.args.get('session_id', '')
     queue = message_queues.get(session_id, [])
     is_thinking = thinking_states.get(session_id, False)
