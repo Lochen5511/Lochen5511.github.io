@@ -362,23 +362,40 @@
       // 儲存名字到 sessionStorage
       sessionStorage.setItem('userName', name);
 
-      // 通知本地 Python 後端建立 log 檔
-      try {
-        const res = await fetch('https://lochen-test.loca.lt/enter', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: name })
-        });
-        const data = await res.json();
-        if (data.session_id) {
-          sessionStorage.setItem('sessionId', data.session_id);
-          sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
+      // 通知本地 Python 後端建立 log 檔（含重試）
+      const MAX_RETRY = 10;
+      const RETRY_DELAY = 1500;
+      let success = false;
+
+      for (let i = 0; i < MAX_RETRY; i++) {
+        try {
+          const res = await fetch('https://lochen-test.loca.lt/enter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: name })
+          });
+          const contentType = res.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) {
+            await new Promise(r => setTimeout(r, RETRY_DELAY));
+            continue;
+          }
+          const data = await res.json();
+          if (data.session_id) {
+            sessionStorage.setItem('sessionId', data.session_id);
+            sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
+            success = true;
+            break;
+          }
+        } catch (e) {
+          console.warn(`[enter 重試 ${i+1}/${MAX_RETRY}]`, e);
+          await new Promise(r => setTimeout(r, RETRY_DELAY));
         }
-      } catch (e) {
-        // 後端未啟動時產生本地 session_id 備用
+      }
+
+      if (!success) {
+        console.warn('後端連線失敗，使用 fallback session_id');
         const fallback = new Date().toISOString().replace(/[-:T.]/g,'').slice(0,15);
         sessionStorage.setItem('sessionId', fallback);
-        console.warn('無法連接本地伺服器:', e);
       }
 
       // 跳轉至主頁面
