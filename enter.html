@@ -327,7 +327,12 @@
   </div>
 
   <script>
-    const BACKEND = 'https://lochen-test.loca.lt';
+    const BACKEND = 'https://lochen5511.loca.lt';
+
+    // 頁面載入時自動打通 localtunnel 驗證
+    fetch(BACKEND, {
+      headers: { 'bypass-tunnel-reminder': 'true' }
+    }).catch(() => {});
 
     const input = document.getElementById('nameInput');
     const errorMsg = document.getElementById('errorMsg');
@@ -352,7 +357,10 @@
       try {
         const res = await fetch(`${BACKEND}/enter`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'bypass-tunnel-reminder': 'true',
+          },
           body: JSON.stringify({ username: name })
         });
         const data = await res.json();
