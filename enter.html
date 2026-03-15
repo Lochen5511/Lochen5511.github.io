@@ -364,7 +364,7 @@
 
       // 通知本地 Python 後端建立 log 檔
       try {
-        const res = await fetch('https://lochen-test.loca.lt/enter', {
+        const res = await fetch('https://lochen5511.loca.lt/enter', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: name })
@@ -374,10 +374,8 @@
           sessionStorage.setItem('sessionId', data.session_id);
           sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
         }
-      }
-
-      if (!success) {
-        console.warn('後端連線失敗，使用 fallback session_id');
+      } catch (e) {
+        console.warn('無法連接本地伺服器:', e);
         const fallback = new Date().toISOString().replace(/[-:T.]/g,'').slice(0,15);
         sessionStorage.setItem('sessionId', fallback);
       }
