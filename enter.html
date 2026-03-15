@@ -374,7 +374,8 @@
         console.warn('無法連接本地伺服器:', e);
       }
 
-      window.location.href = 'main.html';
+      const sid = sessionStorage.getItem('sessionId') || '';
+      window.location.href = `main.html?username=${encodeURIComponent(name)}&session_id=${encodeURIComponent(sid)}`;
     }
   </script>
 

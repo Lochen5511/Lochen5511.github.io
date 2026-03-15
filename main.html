@@ -523,8 +523,16 @@
 <script>
   const BACKEND = 'https://lochen-test.loca.lt';
 
-  // 取得使用者名稱
-  const userName = sessionStorage.getItem('userName') || '使用者';
+  // 優先從 URL 參數取得，fallback 到 sessionStorage
+  const urlParams  = new URLSearchParams(window.location.search);
+  const userName   = urlParams.get('username') || sessionStorage.getItem('userName') || '使用者';
+  const sessionId  = urlParams.get('session_id') || sessionStorage.getItem('sessionId') || '';
+
+  // 同步回 sessionStorage 備用
+  sessionStorage.setItem('userName',  userName);
+  sessionStorage.setItem('sessionId', sessionId);
+
+  console.log('[debug] sessionId:', sessionId, 'userName:', userName);
   const badge = document.getElementById('userBadge');
   if (userName) badge.innerHTML = `<strong>${userName}</strong>`;
 
@@ -667,17 +675,6 @@
     msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' });
   }
 
-  const sessionId = sessionStorage.getItem('sessionId') || '';
-  console.log('[debug] sessionId:', sessionId);
-  console.log('[debug] userName:', userName);
-
-  // sessionId 顯示在頁面上方便手機也能看到
-  if (!sessionId) {
-    document.title = 'ERROR: no sessionId';
-  } else {
-    document.title = 'AI 共學 | ' + sessionId.slice(-6);
-  }
-
   function showModal(msg) {
     document.getElementById('modalMsg').textContent = msg;
     document.getElementById('modalOverlay').classList.add('show');
@@ -737,6 +734,7 @@
 
   // 頁面載入後自動觸發 AI 第一句問候
   window.addEventListener('load', async () => {
+    console.log('[debug] load - sessionId:', sessionId, 'userName:', userName);
     const typing = appendTyping();
     try {
       const res = await fetch(`${BACKEND}/greeting`, {
