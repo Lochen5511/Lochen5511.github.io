@@ -15,15 +15,6 @@ def add_cors_headers(response):
     response.headers['bypass-tunnel-reminder']       = 'true'
     return response
 
-@app.before_request
-def handle_options():
-    if request.method == 'OPTIONS':
-        return Response(status=200, headers={
-            'Access-Control-Allow-Origin':  '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
-        })
-
 LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
 
 # 每個 session 有自己獨立的訊息隊列
@@ -70,12 +61,6 @@ def chat():
 @app.route('/fetch_user_input', methods=['GET', 'OPTIONS'])
 def fetch_user_input():
     """button.py 輪詢此端點，等待用戶輸入"""
-    if request.method == 'OPTIONS':
-        return Response('', status=200, headers={
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
-        })
     session_id = request.args.get('session_id', '')
     queue = user_input_queues.get(session_id, [])
     if queue:
@@ -122,14 +107,8 @@ def push():
 @app.route('/poll', methods=['GET', 'OPTIONS'])
 def poll():
     """main.html 定期呼叫此端點，取出最新一則訊息"""
-    if request.method == 'OPTIONS':
-        return Response('', status=200, headers={
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
-        })
-    session_id = request.args.get('session_id', '')
-    queue = message_queues.get(session_id, [])
+    session_id  = request.args.get('session_id', '')
+    queue       = message_queues.get(session_id, [])
     is_thinking = thinking_states.get(session_id, False)
 
     if queue:
