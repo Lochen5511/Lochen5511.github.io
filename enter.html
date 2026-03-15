@@ -33,7 +33,6 @@
       background-color: #1a1612;
     }
 
-    /* ── 背景圖層 ── */
     .bg {
       position: fixed;
       inset: 0;
@@ -47,7 +46,6 @@
       transition: filter 1.2s ease;
     }
 
-    /* 細緻暗角 */
     .vignette {
       position: fixed;
       inset: 0;
@@ -58,7 +56,6 @@
       pointer-events: none;
     }
 
-    /* ── 對話框容器 ── */
     .dialog-wrapper {
       position: relative;
       z-index: 10;
@@ -71,7 +68,6 @@
       animation: fadeUp 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
     }
 
-    /* 頂部裝飾線 */
     .deco-top {
       display: flex;
       align-items: center;
@@ -93,7 +89,6 @@
       opacity: 0.85;
     }
 
-    /* 主對話框 */
     .dialog {
       width: 420px;
       padding: 52px 48px 44px;
@@ -109,7 +104,6 @@
       overflow: hidden;
     }
 
-    /* 左上角光暈 */
     .dialog::before {
       content: '';
       position: absolute;
@@ -142,7 +136,6 @@
       line-height: 1.4;
     }
 
-    /* Input 欄位 */
     .input-group {
       position: relative;
       margin-bottom: 28px;
@@ -186,7 +179,6 @@
       background: rgba(201,168,76,0.04);
     }
 
-    /* 底部滑動線 */
     .input-group .underline {
       position: absolute;
       bottom: 0; left: 0;
@@ -198,7 +190,6 @@
       width: 100%;
     }
 
-    /* 進入按鈕 */
     .btn-enter {
       width: 100%;
       padding: 15px;
@@ -239,7 +230,6 @@
       transform: scale(0.98);
     }
 
-    /* 底部提示文字 */
     .dialog-footer {
       margin-top: 24px;
       text-align: center;
@@ -249,7 +239,6 @@
       color: rgba(245,240,232,0.28);
     }
 
-    /* 底部裝飾 */
     .deco-bottom {
       display: flex;
       align-items: center;
@@ -270,12 +259,10 @@
       opacity: 0.5;
     }
 
-    /* 動畫 */
     @keyframes fadeUp {
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* 錯誤提示 */
     .error-msg {
       font-size: 11px;
       color: #e8a87c;
@@ -340,10 +327,11 @@
   </div>
 
   <script>
+    const BACKEND = 'https://lochen5511.loca.lt';
+
     const input = document.getElementById('nameInput');
     const errorMsg = document.getElementById('errorMsg');
 
-    // Enter 鍵也可觸發
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleEnter();
     });
@@ -359,12 +347,10 @@
       }
       errorMsg.classList.remove('show');
 
-      // 儲存名字到 sessionStorage
       sessionStorage.setItem('userName', name);
 
-      // 通知本地 Python 後端建立 log 檔
       try {
-        const res = await fetch('https://lochen-test.loca.lt/enter', {
+        const res = await fetch(`${BACKEND}/enter`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: name })
@@ -375,12 +361,11 @@
           sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
         }
       } catch (e) {
-        console.warn('無法連接本地伺服器:', e);
         const fallback = new Date().toISOString().replace(/[-:T.]/g,'').slice(0,15);
         sessionStorage.setItem('sessionId', fallback);
+        console.warn('無法連接本地伺服器:', e);
       }
 
-      // 跳轉至主頁面
       window.location.href = 'main.html';
     }
   </script>
