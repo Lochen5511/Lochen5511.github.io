@@ -629,7 +629,7 @@
     logMessage('user', `[按鈕:${buttonId}] ${label}`);
 
     // 送至後端
-    fetch('https://lochen5511.loca.lt/chat', {
+    fetch('https://lochen-test.loca.lt/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -681,7 +681,7 @@
   // 每秒輪詢一次，取出 button.py 推送的訊息
   setInterval(async () => {
     try {
-      const res = await fetch(`https://lochen5511.loca.lt/poll?session_id=${encodeURIComponent(sessionId)}`);
+      const res = await fetch(`https://lochen-test.loca.lt/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
 
       if (data.message) {
@@ -707,7 +707,7 @@
   // 記錄訊息至本地 txt 檔
   async function logMessage(role, message) {
     try {
-      await fetch('https://lochen5511.loca.lt/log', {
+      await fetch('https://lochen-test.loca.lt/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: userName, session_id: sessionId, role, message })
@@ -726,7 +726,7 @@
   window.addEventListener('load', async () => {
     const typing = appendTyping();
     try {
-      const res = await fetch('https://lochen5511.loca.lt/greeting', {
+      const res = await fetch('https://lochen-test.loca.lt/greeting', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: userName, session_id: sessionId })
@@ -755,7 +755,7 @@
     sendBtn.classList.remove('active');
 
     try {
-      await fetch('https://lochen5511.loca.lt/chat', {
+      await fetch('https://lochen-test.loca.lt/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
