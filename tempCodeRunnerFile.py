@@ -26,9 +26,6 @@ thinking_states = {}
 # 等待用戶輸入的隊列（session_id -> 用戶訊息）
 user_input_queues = defaultdict(list)
 
-# 已啟動 button.py 的 session（防止重複啟動）
-launched_sessions = set()
-
 
 @app.route('/', methods=['GET'])
 def index():
@@ -157,13 +154,6 @@ def greeting():
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
     log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt") if session_id else os.path.join(LOG_DIR, f"{username}.txt")
-
-    # 防止同一 session 重複啟動 button.py
-    if session_id in launched_sessions:
-        print(f"[greeting] session {session_id} 已啟動，跳過重複啟動")
-        return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)'})
-
-    launched_sessions.add(session_id)
 
     # 在背景執行 button.py，傳入變數作為命令列參數
     def run_button():

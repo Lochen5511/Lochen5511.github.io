@@ -521,7 +521,7 @@
 </div>
 
 <script>
-  const BACKEND = 'https://lochen-test.loca.lt';
+  const BACKEND = 'https://lochen5511.loca.lt';
 
   // 優先從 URL 參數取得，fallback 到 sessionStorage
   const urlParams  = new URLSearchParams(window.location.search);
@@ -689,9 +689,7 @@
   // 每秒輪詢一次，取出 button.py 推送的訊息
   setInterval(async () => {
     try {
-      const res = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`, {
-        headers: { 'bypass-tunnel-reminder': 'true' }
-      });
+      const res = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
 
       if (data.message) {
