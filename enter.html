@@ -362,33 +362,17 @@
       // 儲存名字到 sessionStorage
       sessionStorage.setItem('userName', name);
 
-      // 通知本地 Python 後端建立 log 檔（含重試）
-      const MAX_RETRY = 10;
-      const RETRY_DELAY = 1500;
-      let success = false;
-
-      for (let i = 0; i < MAX_RETRY; i++) {
-        try {
-          const res = await fetch('https://lochen5511.loca.lt/enter', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: name })
-          });
-          const contentType = res.headers.get('content-type') || '';
-          if (!contentType.includes('application/json')) {
-            await new Promise(r => setTimeout(r, RETRY_DELAY));
-            continue;
-          }
-          const data = await res.json();
-          if (data.session_id) {
-            sessionStorage.setItem('sessionId', data.session_id);
-            sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
-            success = true;
-            break;
-          }
-        } catch (e) {
-          console.warn(`[enter 重試 ${i+1}/${MAX_RETRY}]`, e);
-          await new Promise(r => setTimeout(r, RETRY_DELAY));
+      // 通知本地 Python 後端建立 log 檔
+      try {
+        const res = await fetch('https://lochen-test.loca.lt/enter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: name })
+        });
+        const data = await res.json();
+        if (data.session_id) {
+          sessionStorage.setItem('sessionId', data.session_id);
+          sessionStorage.setItem('logPath', `C:/Users/Procidens_Pulvis/Desktop/TxT/website_AI/log/${name}_${data.session_id}.txt`);
         }
       }
 
