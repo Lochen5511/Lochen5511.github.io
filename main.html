@@ -4,22 +4,22 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI 共學</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg:        #13110e;
-      --surface:   #1c1814;
-      --surface2:  #242018;
-      --border:    rgba(201,168,76,0.18);
-      --gold:      #c9a84c;
-      --gold-dim:  rgba(201,168,76,0.55);
-      --cream:     #f0ebe0;
-      --muted:     rgba(240,235,224,0.38);
-      --user-bg:   #2a2318;
-      --ai-bg:     #1c1814;
-      --radius:    14px;
+      --bg:       #13110e;
+      --surface:  #1c1814;
+      --surface2: #242018;
+      --border:   rgba(201,168,76,0.18);
+      --gold:     #c9a84c;
+      --gold-dim: rgba(201,168,76,0.55);
+      --cream:    #f0ebe0;
+      --muted:    rgba(240,235,224,0.38);
+      --user-bg:  #2a2318;
+      --ai-bg:    #1c1814;
+      --radius:   14px;
     }
 
     html, body {
@@ -30,435 +30,257 @@
       overflow: hidden;
     }
 
-    /* ── 整體佈局 ── */
+    /* ── Layout ── */
     .app {
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column;
       height: 100vh;
       max-width: 1000px;
       margin: 0 auto;
-      position: relative;
     }
 
-    /* ── 頂部 Header ── */
+    /* ── Header ── */
     header {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px 28px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px 24px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
+      flex-shrink: 0; gap: 14px;
       position: relative;
-      flex-shrink: 0;
-      gap: 14px;
-      opacity: 0;
-      animation: fadeDown 0.7s cubic-bezier(0.22,1,0.36,1) 0.1s forwards;
     }
-
-    .header-deco {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .header-deco .line {
-      width: 36px; height: 1px;
+    .hd { display: flex; align-items: center; gap: 8px; }
+    .hd .line {
+      width: 32px; height: 1px;
       background: linear-gradient(to right, transparent, var(--gold-dim));
     }
-    .header-deco.right .line {
-      background: linear-gradient(to left, transparent, var(--gold-dim));
-    }
-    .header-deco .diamond {
+    .hd.r .line { background: linear-gradient(to left, transparent, var(--gold-dim)); }
+    .hd .diamond {
       width: 5px; height: 5px;
-      background: var(--gold);
-      transform: rotate(45deg);
-      opacity: 0.7;
+      background: var(--gold); transform: rotate(45deg); opacity: 0.7;
     }
-
     header h1 {
-      font-family: 'Noto Serif TC', serif;
-      font-size: 20px;
-      font-weight: 400;
-      letter-spacing: 0.25em;
-      color: var(--cream);
+      font-size: 19px; font-weight: 400; letter-spacing: 0.25em; color: var(--cream);
     }
-    header h1 span {
-      color: var(--gold);
-    }
-
-    /* 右上角用戶名 */
+    header h1 span { color: var(--gold); }
     .user-badge {
-      position: absolute;
-      right: 24px;
+      position: absolute; right: 20px;
       font-family: 'Cormorant Garamond', serif;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      color: var(--muted);
+      font-size: 13px; letter-spacing: 0.1em; color: var(--muted);
     }
-    .user-badge strong {
-      color: var(--gold-dim);
-      font-weight: 400;
-    }
+    .user-badge strong { color: var(--gold-dim); font-weight: 400; }
 
-    /* ── 訊息區域 ── */
+    /* ── Messages ── */
     .messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 28px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+      flex: 1; overflow-y: auto;
+      padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 18px;
       scrollbar-width: thin;
-      scrollbar-color: rgba(201,168,76,0.2) transparent;
+      scrollbar-color: rgba(201,168,76,0.15) transparent;
     }
-    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar { width: 3px; }
     .messages::-webkit-scrollbar-thumb {
-      background: rgba(201,168,76,0.2);
-      border-radius: 2px;
+      background: rgba(201,168,76,0.15); border-radius: 2px;
     }
 
-    /* 空狀態提示 */
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      opacity: 0;
-      animation: fadeUp 0.8s ease 0.5s forwards;
+    /* Empty state */
+    .empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
     }
-    .empty-state .icon {
-      width: 48px; height: 48px;
-      border: 1px solid var(--border);
-      border-radius: 50%;
+    .empty .icon {
+      width: 44px; height: 44px;
+      border: 1px solid var(--border); border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
-      color: var(--gold-dim);
+      font-size: 18px; color: var(--gold-dim);
     }
-    .empty-state p {
+    .empty p {
       font-family: 'Cormorant Garamond', serif;
-      font-size: 15px;
-      letter-spacing: 0.15em;
-      color: var(--muted);
+      font-size: 14px; letter-spacing: 0.15em; color: var(--muted);
     }
 
-    /* ── 訊息泡泡 ── */
+    /* ── Message row ── */
     .msg {
-      display: flex;
-      gap: 12px;
-      opacity: 0;
-      transform: translateY(10px);
-      animation: msgIn 0.35s ease forwards;
-      align-items: flex-start;
-      width: 100%;
+      display: flex; gap: 10px;
+      align-items: flex-start; width: 100%;
+      opacity: 0; transform: translateY(8px);
+      animation: msgIn 0.3s ease forwards;
     }
     .msg.user { flex-direction: row-reverse; }
 
-    /* 頭像欄：名字 + 圓圈，靠頂對齊 */
     .avatar-col {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      flex-shrink: 0;
-      padding-top: 0;
-    }
-    .avatar-name {
-      font-family: 'Noto Serif TC', serif;
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-      text-align: center;
-      max-width: 56px;
-      word-break: break-all;
-      line-height: 1.3;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 4px; flex-shrink: 0;
     }
     .avatar {
-      width: 44px; height: 44px;
-      border-radius: 50%;
+      width: 40px; height: 40px; border-radius: 50%;
       border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
-      flex-shrink: 0;
-      font-family: 'Noto Serif TC', serif;
+      font-size: 12px; font-family: 'Noto Serif TC', serif;
     }
-    .msg.ai .avatar {
-      background: var(--surface2);
-      color: var(--gold);
-    }
-    .msg.user .avatar {
-      background: var(--user-bg);
-      color: var(--cream);
+    .msg.ai   .avatar { background: var(--surface2); color: var(--gold); }
+    .msg.user .avatar { background: var(--user-bg);  color: var(--cream); }
+    .avatar-name {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 0.08em; text-align: center;
+      max-width: 48px; word-break: break-all; line-height: 1.3;
     }
 
-    /* 泡泡欄，靠頂對齊 */
     .msg-body {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-      padding-top: 0;
+      display: flex; flex-direction: column;
+      flex: 1; min-width: 0;
     }
     .msg.user .msg-body { align-items: flex-end; }
 
     .bubble {
-      padding: 13px 18px;
-      border-radius: var(--radius);
-      font-size: 15px;
-      font-weight: 300;
-      line-height: 1.7;
+      padding: 12px 16px; border-radius: var(--radius);
+      font-size: 15px; font-weight: 300; line-height: 1.7;
       letter-spacing: 0.02em;
-      word-break: break-word;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      width: fit-content;
-      max-width: 100%;
+      word-break: break-word; white-space: pre-wrap; overflow-wrap: anywhere;
+      width: fit-content; max-width: 100%;
     }
-    .msg.ai .bubble {
-      background: var(--ai-bg);
-      border: 1px solid var(--border);
-      border-top-left-radius: 4px;
-      color: var(--cream);
+    .msg.ai   .bubble {
+      background: var(--ai-bg); border: 1px solid var(--border);
+      border-top-left-radius: 4px; color: var(--cream);
     }
     .msg.user .bubble {
-      background: var(--user-bg);
-      border: 1px solid rgba(201,168,76,0.22);
-      border-top-right-radius: 4px;
-      color: var(--cream);
+      background: var(--user-bg); border: 1px solid rgba(201,168,76,0.22);
+      border-top-right-radius: 4px; color: var(--cream);
     }
 
-    /* 手機端響應式 */
-    @media (max-width: 600px) {
-      .messages { padding: 16px 10px; }
-      .msg { gap: 8px; }
-      .avatar { width: 36px; height: 36px; font-size: 11px; }
-      .avatar-name { font-size: 10px; max-width: 40px; }
-      .bubble { font-size: 14px; padding: 10px 14px; }
+    .msg-time {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 11px; color: var(--muted);
+      margin-top: 4px; opacity: 0.65; letter-spacing: 0.08em;
     }
-
-    /* 並排按鈕列 */
-    .btn-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 6px;
-    }
-
-    /* 按鈕氣泡 */
-    .btn-bubble {
-      display: inline-block;
-      margin-top: 6px;
-      border-radius: 8px;
-      background: transparent;
-      font-family: 'Noto Serif TC', serif;
-      letter-spacing: 0.15em;
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s, transform 0.1s;
-      border: 1px solid;
-    }
-    .btn-bubble:active { transform: scale(0.97); }
-    .btn-bubble.used {
-      opacity: 0.4;
-      cursor: default;
-      pointer-events: none;
-    }
-
-    /* 大小 */
-    .btn-bubble.small  { padding: 6px 16px;  font-size: 12px; }
-    .btn-bubble.medium { padding: 10px 28px; font-size: 14px; }
-    .btn-bubble.large  { padding: 14px 40px; font-size: 17px; }
-
-    /* 顏色 */
-    .btn-bubble.gold  { border-color: var(--gold);  color: var(--gold-light); }
-    .btn-bubble.gold:hover  { background: rgba(201,168,76,0.15); color: var(--cream); }
-    .btn-bubble.green { border-color: #6abf69; color: #6abf69; }
-    .btn-bubble.green:hover { background: rgba(106,191,105,0.15); color: #c8f5c7; }
-    .btn-bubble.blue  { border-color: #6aaabf; color: #6aaabf; }
-    .btn-bubble.blue:hover  { background: rgba(106,170,191,0.15); color: #c7e8f5; }
-    .btn-bubble.red   { border-color: #bf6a6a; color: #bf6a6a; }
-    .btn-bubble.red:hover   { background: rgba(191,106,106,0.15); color: #f5c7c7; }
-    .btn-bubble.gray  { border-color: #888; color: #aaa; }
-    .btn-bubble.gray:hover  { background: rgba(136,136,136,0.15); color: #ddd; }
-
     .msg.user .msg-time { text-align: right; }
 
-    /* 打字動畫（正在輸入氣泡） */
+    /* ── Typing indicator ── */
     .typing-indicator {
       display: flex; gap: 5px; align-items: center;
-      padding: 14px 18px;
+      padding: 14px 16px;
     }
     .typing-indicator span {
       width: 6px; height: 6px;
-      background: var(--gold-dim);
-      border-radius: 50%;
+      background: var(--gold-dim); border-radius: 50%;
       animation: bounce 1.2s infinite;
     }
     .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
     .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
-    /* ── 底部輸入區 ── */
-    .input-area {
-      padding: 16px 20px 20px;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      flex-shrink: 0;
-      opacity: 0;
-      animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) 0.2s forwards;
+    /* ── Buttons ── */
+    .btn-row {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;
     }
+    .btn-bubble {
+      display: inline-block; border-radius: 8px;
+      background: transparent; font-family: 'Noto Serif TC', serif;
+      letter-spacing: 0.12em; cursor: pointer;
+      transition: background 0.2s, color 0.2s, transform 0.1s;
+      border: 1px solid;
+    }
+    .btn-bubble:active  { transform: scale(0.97); }
+    .btn-bubble.used    { opacity: 0.35; cursor: default; pointer-events: none; }
+    .btn-bubble.small   { padding: 6px 14px;  font-size: 12px; }
+    .btn-bubble.medium  { padding: 10px 26px; font-size: 14px; }
+    .btn-bubble.large   { padding: 13px 38px; font-size: 16px; }
+    .btn-bubble.gold    { border-color: var(--gold);  color: var(--gold); }
+    .btn-bubble.gold:hover  { background: rgba(201,168,76,0.14); color: var(--cream); }
+    .btn-bubble.green   { border-color: #6abf69; color: #6abf69; }
+    .btn-bubble.green:hover { background: rgba(106,191,105,0.14); color: #c8f5c7; }
+    .btn-bubble.blue    { border-color: #6aaabf; color: #6aaabf; }
+    .btn-bubble.blue:hover  { background: rgba(106,170,191,0.14); color: #c7e8f5; }
+    .btn-bubble.red     { border-color: #bf6a6a; color: #bf6a6a; }
+    .btn-bubble.red:hover   { background: rgba(191,106,106,0.14); color: #f5c7c7; }
+    .btn-bubble.gray    { border-color: #777; color: #999; }
+    .btn-bubble.gray:hover  { background: rgba(136,136,136,0.14); color: #ddd; }
 
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 34px 38px;
+      max-width: 400px; width: 90%; text-align: center;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .modal-icon { font-size: 26px; margin-bottom: 12px; }
+    .modal-msg {
+      font-size: 15px; font-weight: 300; color: var(--cream);
+      line-height: 1.8; letter-spacing: 0.04em; margin-bottom: 26px;
+    }
+    .modal-close {
+      padding: 10px 30px;
+      border: 1px solid var(--gold); border-radius: 8px;
+      background: transparent; color: var(--gold);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 13px; letter-spacing: 0.2em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .modal-close:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
+
+    /* ── Input area ── */
+    .input-area {
+      padding: 14px 18px 18px;
+      border-top: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
     .input-row {
-      display: flex;
-      align-items: flex-end;
-      gap: 12px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 10px 10px 18px;
-      transition: border-color 0.3s ease;
+      display: flex; align-items: flex-end; gap: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 9px 9px 9px 16px;
+      transition: border-color 0.3s;
     }
     .input-row:focus-within {
       border-color: rgba(201,168,76,0.45);
       box-shadow: 0 0 0 3px rgba(201,168,76,0.05);
     }
-
     textarea {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      resize: none;
-      font-family: 'Noto Serif TC', serif;
-      font-size: 15px;
-      font-weight: 300;
-      color: var(--cream);
-      line-height: 1.6;
-      max-height: 140px;
-      min-height: 26px;
-      caret-color: var(--gold);
-      scrollbar-width: none;
+      flex: 1; background: transparent; border: none; outline: none;
+      resize: none; font-family: 'Noto Serif TC', serif;
+      font-size: 15px; font-weight: 300; color: var(--cream);
+      line-height: 1.6; max-height: 130px; min-height: 24px;
+      caret-color: var(--gold); scrollbar-width: none;
     }
     textarea::placeholder {
-      color: var(--muted);
-      font-family: 'Cormorant Garamond', serif;
-      font-style: italic;
-      font-size: 15px;
+      color: var(--muted); font-family: 'Cormorant Garamond', serif;
+      font-style: italic; font-size: 15px;
     }
     textarea::-webkit-scrollbar { display: none; }
-
-    /* 傳送按鈕 */
     .btn-send {
-      width: 40px; height: 40px;
-      border-radius: 9px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
+      width: 38px; height: 38px; border-radius: 8px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--muted); cursor: pointer; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      transition: all 0.25s ease;
+      transition: all 0.25s;
     }
-    .btn-send svg {
-      width: 18px; height: 18px;
-      transition: transform 0.2s ease;
-    }
-    .btn-send.active {
-      background: var(--gold);
-      border-color: var(--gold);
-      color: var(--bg);
-    }
-    .btn-send.active:hover {
-      background: #d4b460;
-      transform: scale(1.05);
-    }
-    .btn-send.active:hover svg {
-      transform: translateX(2px) translateY(-2px);
-    }
-    .btn-send.active:active {
-      transform: scale(0.96);
-    }
-
-    /* 字數提示 */
+    .btn-send svg { width: 17px; height: 17px; transition: transform 0.2s; }
+    .btn-send.active { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+    .btn-send.active:hover { background: #d4b460; transform: scale(1.05); }
+    .btn-send.active:hover svg { transform: translate(2px,-2px); }
+    .btn-send.active:active { transform: scale(0.96); }
     .input-hint {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 7px;
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      opacity: 0.6;
+      display: flex; justify-content: flex-end;
+      margin-top: 6px; font-family: 'Cormorant Garamond', serif;
+      font-size: 11px; letter-spacing: 0.1em; color: var(--muted); opacity: 0.55;
     }
 
-    /* ── 彈出視窗 ── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.65);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal-overlay.show {
-      display: flex;
-      animation: fadeIn 0.25s ease;
-    }
-    .modal-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 36px 40px;
-      max-width: 420px;
-      width: 90%;
-      text-align: center;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-      animation: scaleIn 0.25s cubic-bezier(0.22,1,0.36,1);
-    }
-    .modal-icon {
-      font-size: 28px;
-      margin-bottom: 14px;
-    }
-    .modal-msg {
-      font-family: 'Noto Serif TC', serif;
-      font-size: 15px;
-      font-weight: 300;
-      color: var(--cream);
-      line-height: 1.8;
-      letter-spacing: 0.04em;
-      margin-bottom: 28px;
-    }
-    .modal-close {
-      padding: 10px 32px;
-      border: 1px solid var(--gold);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--gold-light);
-      font-family: 'Noto Serif TC', serif;
-      font-size: 13px;
-      letter-spacing: 0.2em;
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-    }
-    .modal-close:hover {
-      background: rgba(201,168,76,0.15);
-      color: var(--cream);
-    }
-    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes scaleIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-    /* ── 動畫 ── */
-    @keyframes fadeDown {
-      from { opacity: 0; transform: translateY(-12px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes msgIn {
-      to { opacity: 1; transform: translateY(0); }
-    }
+    /* ── Animations ── */
+    @keyframes msgIn  { to { opacity: 1; transform: translateY(0); } }
     @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); }
-      30%           { transform: translateY(-6px); }
+      0%,60%,100% { transform: translateY(0); }
+      30%         { transform: translateY(-6px); }
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .messages { padding: 14px 10px; }
+      .msg { gap: 8px; }
+      .avatar { width: 34px; height: 34px; }
+      .avatar-name { font-size: 9px; max-width: 38px; }
+      .bubble { font-size: 14px; padding: 10px 13px; }
     }
   </style>
 </head>
@@ -466,7 +288,7 @@
 
 <div class="app">
 
-  <!-- 彈出視窗 -->
+  <!-- Modal -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
       <div class="modal-icon">⚠</div>
@@ -475,186 +297,163 @@
     </div>
   </div>
 
-  <!-- 頂部 -->
+  <!-- Header -->
   <header>
-    <div class="header-deco">
-      <div class="line"></div>
-      <div class="diamond"></div>
+    <div class="hd">
+      <div class="line"></div><div class="diamond"></div>
     </div>
     <h1><span>AI</span> 共學</h1>
-    <div class="header-deco right">
-      <div class="diamond"></div>
-      <div class="line"></div>
+    <div class="hd r">
+      <div class="diamond"></div><div class="line"></div>
     </div>
     <div class="user-badge" id="userBadge"></div>
   </header>
 
-  <!-- 訊息列表 -->
+  <!-- Messages -->
   <div class="messages" id="messages">
-    <div class="empty-state" id="emptyState">
+    <div class="empty" id="emptyState">
       <div class="icon">✦</div>
-      <p>有什麼想學的？請開始提問</p>
+      <p>系統初始化中，請稍候…</p>
     </div>
   </div>
 
-  <!-- 底部輸入區 -->
+  <!-- Input -->
   <div class="input-area">
     <div class="input-row">
-      <textarea
-        id="msgInput"
-        placeholder="輸入訊息…"
-        rows="1"
-        maxlength="2000"
-      ></textarea>
+      <textarea id="msgInput" placeholder="輸入訊息…" rows="1" maxlength="2000"></textarea>
       <button class="btn-send" id="sendBtn" onclick="sendMessage()" title="傳送 (Enter)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
           <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
         </svg>
       </button>
     </div>
-    <div class="input-hint">
-      <span id="charCount">0 / 2000</span>
-    </div>
+    <div class="input-hint"><span id="charCount">0 / 2000</span></div>
   </div>
 
 </div>
 
 <script>
+  /* ── 設定 ── */
   const BACKEND = 'https://lochen5511.loca.lt';
 
-  // 優先從 URL 參數取得，fallback 到 sessionStorage
-  const urlParams  = new URLSearchParams(window.location.search);
-  const userName   = urlParams.get('username') || sessionStorage.getItem('userName') || '使用者';
-  const sessionId  = urlParams.get('session_id') || sessionStorage.getItem('sessionId') || '';
+  /* ── 從 URL 取得 session 資訊 ── */
+  const params    = new URLSearchParams(window.location.search);
+  const userName  = params.get('username')   || '使用者';
+  const sessionId = params.get('session_id') || '';
 
-  // 同步回 sessionStorage 備用
-  sessionStorage.setItem('userName',  userName);
-  sessionStorage.setItem('sessionId', sessionId);
+  console.log('[main] userName:', userName, 'sessionId:', sessionId);
 
-  console.log('[debug] sessionId:', sessionId, 'userName:', userName);
-  const badge = document.getElementById('userBadge');
-  if (userName) badge.innerHTML = `<strong>${userName}</strong>`;
+  /* ── 顯示用戶名 ── */
+  document.getElementById('userBadge').innerHTML = `<strong>${userName}</strong>`;
 
-  const input   = document.getElementById('msgInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const msgList = document.getElementById('messages');
-  const empty   = document.getElementById('emptyState');
+  /* ── DOM refs ── */
+  const msgList  = document.getElementById('messages');
+  const emptyEl  = document.getElementById('emptyState');
+  const input    = document.getElementById('msgInput');
+  const sendBtn  = document.getElementById('sendBtn');
   const charCount = document.getElementById('charCount');
 
-  // 自動調整 textarea 高度
+  /* ── Input handlers ── */
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    input.style.height = Math.min(input.scrollHeight, 130) + 'px';
     const len = input.value.length;
     charCount.textContent = `${len} / 2000`;
     sendBtn.classList.toggle('active', len > 0);
   });
 
-  // Enter 傳送（Shift+Enter 換行）
-  input.addEventListener('keydown', (e) => {
+  input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   });
 
+  /* ── Helpers ── */
   function getTime() {
     return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
   }
 
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\n/g,'<br>');
+  }
+
+  function scrollBottom() {
+    msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' });
+  }
+
+  function removeEmpty() {
+    if (emptyEl.parentNode) emptyEl.remove();
+  }
+
+  /* ── Modal ── */
+  function showModal(msg) {
+    document.getElementById('modalMsg').textContent = msg;
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+
+  /* ── Append message ── */
   function appendMsg(text, role) {
-    if (empty.parentNode) empty.remove();
+    removeEmpty();
+    const label = role === 'user' ? userName : 'AI';
 
-    const label = role === 'user' ? (userName || 'U') : 'AI';
-
-    // 判斷是否為按鈕訊息
     const isButton  = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
     const isButtons = text.startsWith('__BUTTONS__');
-    let contentHtml = '';
+    let content = '';
 
     if (isButtons) {
-      // 多按鈕並排，加上同一個 group-id 讓點擊時整組失效
-      const groupId = 'btngroup_' + Date.now();
-      const parts = text.replace('__BUTTONS__', '').split(';');
-      const btns = parts.map(p => {
-        const [btnLabel, btnColor, btnSize, btnId] = p.split('||');
-        return `<button class="btn-bubble ${btnColor||'gold'} ${btnSize||'medium'}"
+      const groupId = 'grp_' + Date.now();
+      const parts   = text.replace('__BUTTONS__', '').split(';');
+      const btns    = parts.map(p => {
+        const [lbl, col, sz, bid] = p.split('||');
+        return `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
           data-group="${groupId}"
-          onclick="clickButton(this, '${(btnLabel||'').replace(/'/g,"\\'")}', '${(btnId||btnLabel||'').replace(/'/g,"\\'")}', '${groupId}')">
-          ${escHtml(btnLabel||'')}
+          onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}','${groupId}')">
+          ${escHtml(lbl||'')}
         </button>`;
       }).join('');
-      contentHtml = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
+      content = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
+
     } else if (isButton) {
-      const parts    = text.replace('__BUTTON__', '').split('||');
-      const btnLabel = parts[0] || '';
-      const btnColor = parts[1] || 'gold';
-      const btnSize  = parts[2] || 'medium';
-      const btnId    = parts[3] || btnLabel;
-      contentHtml = `<button class="btn-bubble ${btnColor} ${btnSize}" onclick="clickButton(this, '${btnLabel.replace(/'/g,"\\'")}', '${btnId.replace(/'/g,"\\'")}')">
-        ${escHtml(btnLabel)}
+      const [lbl, col, sz, bid] = text.replace('__BUTTON__','').split('||');
+      content = `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
+        onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}')">
+        ${escHtml(lbl||'')}
       </button>`;
+
     } else {
-      contentHtml = `<div class="bubble">${escHtml(text)}</div>`;
+      content = `<div class="bubble">${escHtml(text)}</div>`;
     }
 
     const div = document.createElement('div');
     div.className = `msg ${role}`;
-
     div.innerHTML = `
       <div class="avatar-col">
         <div class="avatar">${role === 'ai' ? 'AI' : ''}</div>
         <span class="avatar-name">${label}</span>
       </div>
       <div class="msg-body">
-        ${contentHtml}
+        ${content}
         <div class="msg-time">${getTime()}</div>
-      </div>
-    `;
+      </div>`;
     msgList.appendChild(div);
     scrollBottom();
     return div;
   }
 
-  function clickButton(btn, label, buttonId, groupId) {
-    // 若有 groupId，整組按鈕都失效
-    if (groupId) {
-      document.querySelectorAll(`[data-group="${groupId}"]`).forEach(b => {
-        b.classList.add('used');
-      });
-    } else {
-      btn.classList.add('used');
-    }
-    btn.textContent = '✓ ' + label;
-
-    // 顯示用戶點擊紀錄
-    appendMsg(label, 'user');
-
-    // 立即顯示思考動畫
-    if (thinkingBubble) { thinkingBubble.remove(); }
-    thinkingBubble = appendTyping();
-
-    // 記錄至 log
-    logMessage('user', `[按鈕:${buttonId}] ${label}`);
-
-    // 送至後端
-    fetch(`${BACKEND}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'bypass-tunnel-reminder': 'true' },
-      body: JSON.stringify({
-        message:    `${buttonId}:${label}`,
-        username:   userName,
-        session_id: sessionId,
-        log_path:   sessionStorage.getItem('logPath') || ''
-      })
-    }).catch(e => console.warn(e));
-  }
+  /* ── Typing bubble ── */
+  let typingBubble = null;
 
   function appendTyping() {
+    removeEmpty();
     const div = document.createElement('div');
     div.className = 'msg ai';
-    div.id = 'typing';
     div.innerHTML = `
       <div class="avatar-col">
         <div class="avatar">AI</div>
@@ -664,120 +463,128 @@
         <div class="bubble typing-indicator">
           <span></span><span></span><span></span>
         </div>
-      </div>
-    `;
+      </div>`;
     msgList.appendChild(div);
     scrollBottom();
     return div;
   }
 
-  function scrollBottom() {
-    msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' });
+  function removeTyping() {
+    if (typingBubble) { typingBubble.remove(); typingBubble = null; }
   }
 
-  function showModal(msg) {
-    document.getElementById('modalMsg').textContent = msg;
-    document.getElementById('modalOverlay').classList.add('show');
+  /* ── Button click ── */
+  function clickBtn(btn, label, buttonId, groupId) {
+    if (groupId) {
+      document.querySelectorAll(`[data-group="${groupId}"]`)
+        .forEach(b => b.classList.add('used'));
+    } else {
+      btn.classList.add('used');
+    }
+    btn.textContent = '✓ ' + label;
+
+    appendMsg(label, 'user');
+    removeTyping();
+    typingBubble = appendTyping();
+    logMsg('user', `[按鈕:${buttonId}] ${label}`);
+
+    post('/chat', {
+      message:    `${buttonId}:${label}`,
+      username:   userName,
+      session_id: sessionId,
+    });
   }
 
-  function closeModal() {
-    document.getElementById('modalOverlay').classList.remove('show');
+  /* ── Post helper ── */
+  async function post(path, body) {
+    try {
+      await fetch(`${BACKEND}${path}`, {
+        method:  'POST',
+        headers: {
+          'Content-Type':          'application/json',
+          'bypass-tunnel-reminder': 'true',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      console.warn(`[post ${path}]`, e.message);
+    }
   }
 
-  let thinkingBubble = null;
+  /* ── Log ── */
+  function logMsg(role, message) {
+    post('/log', { username: userName, session_id: sessionId, role, message });
+  }
 
-  // 每秒輪詢一次，取出 button.py 推送的訊息
+  /* ── Poll（每秒，純 GET，不帶自訂 header 避免觸發預檢）── */
   setInterval(async () => {
     try {
-      const res = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
+      const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
 
       if (data.message) {
-        thinkingBubble && (thinkingBubble.remove(), thinkingBubble = null);
+        removeTyping();
         if (data.message.startsWith('__ALERT__')) {
           showModal(data.message.replace('__ALERT__', ''));
         } else {
           appendMsg(data.message, 'ai');
-          logMessage('ai', data.message);
+          logMsg('ai', data.message);
         }
-      } else if (data.thinking && !thinkingBubble) {
-        // 開始思考：顯示思考氣泡
-        thinkingBubble = appendTyping();
-      } else if (!data.thinking && thinkingBubble) {
-        // 停止思考：移除氣泡
-        thinkingBubble.remove(); thinkingBubble = null;
+      } else if (data.thinking && !typingBubble) {
+        typingBubble = appendTyping();
+      } else if (!data.thinking && typingBubble) {
+        removeTyping();
       }
     } catch (e) {
-      console.warn('[poll error]', e);
+      console.warn('[poll]', e.message);
     }
   }, 1000);
 
-  // 記錄訊息至本地 txt 檔
-  async function logMessage(role, message) {
-    try {
-      await fetch(`${BACKEND}/log`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'bypass-tunnel-reminder': 'true' },
-        body: JSON.stringify({ username: userName, session_id: sessionId, role, message })
-      });
-    } catch (e) {
-      console.warn('Log 記錄失敗:', e);
-    }
-  }
-
-  function escHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-              .replace(/\n/g,'<br>');
-  }
-
-  // 頁面載入後自動觸發 AI 第一句問候
+  /* ── Greeting（頁面載入後呼叫一次）── */
   window.addEventListener('load', async () => {
-    console.log('[debug] load - sessionId:', sessionId, 'userName:', userName);
-    const typing = appendTyping();
+    typingBubble = appendTyping();
     try {
-      const res = await fetch(`${BACKEND}/greeting`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'bypass-tunnel-reminder': 'true' },
-        body: JSON.stringify({ username: userName, session_id: sessionId })
-      });
+      const res  = await post_r('/greeting', { username: userName, session_id: sessionId });
       const data = await res.json();
-      typing.remove();
-      appendMsg(data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
-      logMessage('ai', data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
-    } catch (err) {
-      typing.remove();
-      appendMsg('> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
-      logMessage('ai', '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
+      removeTyping();
+      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      appendMsg(reply, 'ai');
+      logMsg('ai', reply);
+    } catch (e) {
+      removeTyping();
+      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      appendMsg(fallback, 'ai');
     }
   });
 
+  async function post_r(path, body) {
+    return fetch(`${BACKEND}${path}`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':          'application/json',
+        'bypass-tunnel-reminder': 'true',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  /* ── Send message ── */
   async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
 
-    // 顯示用戶訊息
     appendMsg(text, 'user');
-    logMessage('user', text);
+    logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
     charCount.textContent = '0 / 2000';
     sendBtn.classList.remove('active');
 
-    try {
-      await fetch(`${BACKEND}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'bypass-tunnel-reminder': 'true' },
-        body: JSON.stringify({
-          message:    text,
-          username:   userName,
-          session_id: sessionId,
-          log_path:   sessionStorage.getItem('logPath') || ''
-        })
-      });
-      // AI 的回應由 button.py 透過 /push → /poll 機制送出，不在這裡處理
-    } catch (err) {
-      appendMsg('⚠ 無法連接本地伺服器，請確認 Python 後端是否執行中。', 'ai');
-    }
+    await post('/chat', {
+      message:    text,
+      username:   userName,
+      session_id: sessionId,
+    });
   }
 </script>
 
