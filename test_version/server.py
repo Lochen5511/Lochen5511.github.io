@@ -317,7 +317,7 @@ if __name__ == '__main__':
     print("=" * 50)
     print("📡 本地網址: http://localhost:5000")
     print("💡 提示: 請使用 Localtunnel 建立公網隧道")
-    print("   指令: npx localtunnel --port 5000 --subdomain lochen5511")
+    print("   指令: npx localtunnel --port 5000 --subdomain lochen")
     print("=" * 50)
     
     # 啟動伺服器
