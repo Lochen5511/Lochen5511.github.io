@@ -722,24 +722,53 @@
               .replace(/\n/g,'<br>');
   }
 
-  // 頁面載入後自動觸發 AI 第一句問候
+  // 頁面載入後自動觸發 AI 第一句問候（含重試機制）
   window.addEventListener('load', async () => {
     const typing = appendTyping();
-    try {
-      const res = await fetch('https://lochen-test.loca.lt/greeting', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: userName, session_id: sessionId })
-      });
-      const data = await res.json();
-      typing.remove();
-      appendMsg(data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
-      logMessage('ai', data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
-    } catch (err) {
-      typing.remove();
-      appendMsg('> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
-      logMessage('ai', '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
+
+    const BACKEND = 'https://lochen-test.loca.lt';
+    const MAX_RETRY = 5;
+    const RETRY_DELAY = 2000;
+
+    for (let i = 0; i < MAX_RETRY; i++) {
+      try {
+        const res = await fetch(`${BACKEND}/greeting`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'bypass-tunnel-reminder': 'true',
+            'ngrok-skip-browser-warning': 'true',
+          },
+          body: JSON.stringify({ username: userName, session_id: sessionId })
+        });
+
+        // localtunnel 有時回傳 HTML 而非 JSON，需要確認
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          // 收到 HTML（tunnel 攔截頁），等待後重試
+          if (i < MAX_RETRY - 1) {
+            await new Promise(r => setTimeout(r, RETRY_DELAY));
+            continue;
+          }
+        }
+
+        const data = await res.json();
+        typing.remove();
+        appendMsg(data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
+        logMessage('ai', data.reply || '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
+        return;
+
+      } catch (err) {
+        if (i < MAX_RETRY - 1) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY));
+        }
+      }
     }
+
+    // 全部重試失敗
+    typing.remove();
+    appendMsg('> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)', 'ai');
+    logMessage('ai', '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)');
   });
 
   async function sendMessage() {
