@@ -668,6 +668,8 @@
   }
 
   const sessionId = sessionStorage.getItem('sessionId') || '';
+  console.log('[debug] sessionId:', sessionId);
+  console.log('[debug] userName:', userName);
 
   function showModal(msg) {
     document.getElementById('modalMsg').textContent = msg;
@@ -704,7 +706,7 @@
         thinkingBubble.remove(); thinkingBubble = null;
       }
     } catch (e) {
-      // 後端未啟動時靜默忽略
+      console.warn('[poll error]', e);
     }
   }, 1000);
 
