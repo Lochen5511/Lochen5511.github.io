@@ -17,7 +17,31 @@ final_va.py
 import json
 import csv
 import os
+import time
 from datetime import datetime
+
+
+# ──────────────────────────────────────────
+# 跨進程檔案鎖（Windows 相容）
+# ──────────────────────────────────────────
+def _acquire_lock(lock_path: str, timeout: float = 10.0):
+    """建立 .lock 檔作為互斥鎖，最多等待 timeout 秒"""
+    start = time.time()
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return True
+        except FileExistsError:
+            if time.time() - start > timeout:
+                print(f"[final_va] 鎖定逾時，強制繼續寫入")
+                return False
+            time.sleep(0.1)
+
+def _release_lock(lock_path: str):
+    try:
+        os.remove(lock_path)
+    except: pass
 
 # ──────────────────────────────────────────
 # 常數
@@ -155,27 +179,33 @@ def export(
         json.dump(profile, f, ensure_ascii=False, indent=2)
     print(f"[final_va] JSON profile 已儲存：{json_path}")
 
-    # ── 2. Wide table CSV（追加模式）──
-    csv_path   = os.path.join(out_dir, 'validity_wide_table.csv')
-    write_header = not os.path.exists(csv_path)
+    # ── 2. Wide table CSV（追加模式 + 跨進程鎖）──
+    csv_path  = os.path.join(out_dir, 'validity_wide_table.csv')
+    lock_path = csv_path + '.lock'
 
-    row = {
-        'student_id':            username,
-        'admin_session_id':      session_id,
-        'accuracy':              metrics.get('accuracy', ''),
-        'avg_confidence':        metrics.get('avg_confidence', ''),
-        'low_conf_ratio':        metrics.get('low_conf_ratio', ''),
-        'high_conf_wrong_ratio': metrics.get('high_conf_wrong_ratio', ''),
-    }
-    for code in ALL_CODES:
-        row[code] = round(strength.get(code, 0.0), 3)
+    acquired = _acquire_lock(lock_path)
+    try:
+        write_header = not os.path.exists(csv_path)
+        row = {
+            'student_id':            username,
+            'admin_session_id':      session_id,
+            'accuracy':              metrics.get('accuracy', ''),
+            'avg_confidence':        metrics.get('avg_confidence', ''),
+            'low_conf_ratio':        metrics.get('low_conf_ratio', ''),
+            'high_conf_wrong_ratio': metrics.get('high_conf_wrong_ratio', ''),
+        }
+        for code in ALL_CODES:
+            row[code] = round(strength.get(code, 0.0), 3)
 
-    with open(csv_path, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=WIDE_TABLE_HEADER)
-        if write_header:
-            writer.writeheader()
-        writer.writerow(row)
-    print(f"[final_va] Wide table 已追加：{csv_path}")
+        with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=WIDE_TABLE_HEADER)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+        print(f"[final_va] Wide table 已追加：{csv_path}")
+    finally:
+        if acquired:
+            _release_lock(lock_path)
 
 
 # ──────────────────────────────────────────

@@ -7,6 +7,11 @@ from collections import defaultdict
 app = Flask(__name__)
 CORS(app)
 
+@app.after_request
+def add_lt_header(response):
+    response.headers['bypass-tunnel-reminder'] = 'true'
+    return response
+
 LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
 
 # 每個 session 有自己獨立的訊息隊列
@@ -152,6 +157,7 @@ def greeting():
     threading.Thread(target=run_button, daemon=True).start()
 
     return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內，未跳出下一步訊息，請重新開啟頁面。刷新未生效時，請通知助教)'})
+
 
 @app.route('/enter', methods=['POST'])
 def enter():
