@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import os
 from datetime import datetime
@@ -17,7 +17,6 @@ def add_cors_headers(response):
 
 @app.before_request
 def handle_options():
-    from flask import request, Response
     if request.method == 'OPTIONS':
         return Response(status=200, headers={
             'Access-Control-Allow-Origin':  '*',
@@ -72,7 +71,11 @@ def chat():
 def fetch_user_input():
     """button.py 輪詢此端點，等待用戶輸入"""
     if request.method == 'OPTIONS':
-        return '', 200
+        return Response('', status=200, headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
+        })
     session_id = request.args.get('session_id', '')
     queue = user_input_queues.get(session_id, [])
     if queue:
@@ -120,7 +123,11 @@ def push():
 def poll():
     """main.html 定期呼叫此端點，取出最新一則訊息"""
     if request.method == 'OPTIONS':
-        return '', 200
+        return Response('', status=200, headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
+        })
     session_id = request.args.get('session_id', '')
     queue = message_queues.get(session_id, [])
     is_thinking = thinking_states.get(session_id, False)
