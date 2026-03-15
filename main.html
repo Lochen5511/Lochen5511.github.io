@@ -671,6 +671,13 @@
   console.log('[debug] sessionId:', sessionId);
   console.log('[debug] userName:', userName);
 
+  // sessionId 顯示在頁面上方便手機也能看到
+  if (!sessionId) {
+    document.title = 'ERROR: no sessionId';
+  } else {
+    document.title = 'AI 共學 | ' + sessionId.slice(-6);
+  }
+
   function showModal(msg) {
     document.getElementById('modalMsg').textContent = msg;
     document.getElementById('modalOverlay').classList.add('show');
