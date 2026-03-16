@@ -336,7 +336,20 @@
 
 <script>
   /* ── 設定 ── */
-  const BACKEND = 'https://lochen5511.loca.lt';
+  let BACKEND = 'https://lochen5511.ngrok-free.app'; // 預設值
+
+  async function loadConfig() {
+    try {
+      const res  = await fetch('./config.json?t=' + Date.now());
+      const data = await res.json();
+      if (data.backend) {
+        BACKEND = data.backend;
+        console.log('[config] 後端網址:', BACKEND);
+      }
+    } catch (e) {
+      console.warn('[config] 讀取失敗，使用預設網址:', BACKEND);
+    }
+  }
 
   /* ── 從 URL 取得 session 資訊 ── */
   const params    = new URLSearchParams(window.location.search);
@@ -516,8 +529,15 @@
     post('/log', { username: userName, session_id: sessionId, role, message });
   }
 
-  /* ── Poll（每秒，純 GET，不帶自訂 header 避免觸發預檢）── */
+  /* ── 沒有 session_id 就跳回 enter ── */
+  if (!sessionId) {
+    console.warn('[main] 沒有 session_id，跳回 enter.html');
+    window.location.href = 'enter.html';
+  }
+
+  /* ── Poll（每秒，純 GET）── */
   setInterval(async () => {
+    if (!sessionId) return;
     try {
       const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
@@ -542,6 +562,7 @@
 
   /* ── Greeting（頁面載入後呼叫一次）── */
   window.addEventListener('load', async () => {
+    await loadConfig();
     typingBubble = appendTyping();
     try {
       const res  = await post_r('/greeting', { username: userName, session_id: sessionId });

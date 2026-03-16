@@ -228,7 +228,21 @@
 </div>
 
 <script>
-  const BACKEND = 'https://lochen5511.loca.lt';
+  let BACKEND = 'https://lochen5511.ngrok-free.app'; // 預設值
+
+  // 從 config.json 讀取後端網址
+  async function loadConfig() {
+    try {
+      const res  = await fetch('./config.json?t=' + Date.now());
+      const data = await res.json();
+      if (data.backend) {
+        BACKEND = data.backend;
+        console.log('[config] 後端網址:', BACKEND);
+      }
+    } catch (e) {
+      console.warn('[config] 讀取失敗，使用預設網址:', BACKEND);
+    }
+  }
 
   const nameInput = document.getElementById('nameInput');
   const enterBtn  = document.getElementById('enterBtn');
@@ -243,13 +257,8 @@
     statusEl.className   = 'status show' + (isInfo ? ' info' : '');
   }
 
-  function hideStatus() {
-    statusEl.className = 'status';
-  }
-
   async function handleEnter() {
     const name = nameInput.value.trim();
-
     if (!name) {
       showStatus('請輸入您的名字才能繼續');
       nameInput.focus();
@@ -258,6 +267,10 @@
 
     enterBtn.disabled = true;
     showStatus('連線中…', true);
+
+    // 確保 config 已載入
+    await loadConfig();
+    console.log('[enter] BACKEND:', BACKEND);
 
     let sessionId = '';
 
