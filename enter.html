@@ -262,6 +262,7 @@
     let sessionId = '';
 
     try {
+      console.log('[enter] 嘗試連線後端...');
       const res = await fetch(`${BACKEND}/enter`, {
         method:  'POST',
         headers: {
@@ -271,25 +272,31 @@
         body: JSON.stringify({ username: name }),
       });
 
+      console.log('[enter] 回應狀態:', res.status, res.headers.get('content-type'));
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('非 JSON 回應（tunnel 攔截）');
+        throw new Error('非 JSON 回應：' + contentType);
       }
 
       const data = await res.json();
+      console.log('[enter] 回應資料:', data);
+
       if (data.session_id) {
         sessionId = data.session_id;
+        console.log('[enter] session_id:', sessionId);
       } else {
         throw new Error('無 session_id');
       }
 
     } catch (e) {
       console.warn('[enter 失敗]', e.message);
-      // 後端無回應時用本地時間戳作為備用
-      sessionId = new Date().toISOString()
-        .replace(/[-:T.Z]/g, '').slice(0, 14);
+      // 後端無回應時用本地時間戳作為備用（格式與後端一致）
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      sessionId = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     }
 
     // 跳轉，把 username 和 session_id 帶進 URL
