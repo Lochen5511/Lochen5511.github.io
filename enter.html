@@ -228,7 +228,7 @@
 </div>
 
 <script>
-  let BACKEND = 'https://lochen5511.ngrok-free.app'; // 預設值
+  let BACKEND = 'https://your-tunnel.trycloudflare.com'; // 預設值
 
   // 從 config.json 讀取後端網址
   async function loadConfig() {
@@ -278,10 +278,7 @@
       console.log('[enter] 嘗試連線後端...');
       const res = await fetch(`${BACKEND}/enter`, {
         method:  'POST',
-        headers: {
-          'Content-Type':          'application/json',
-          'bypass-tunnel-reminder': 'true',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: name }),
       });
 

@@ -336,7 +336,7 @@
 
 <script>
   /* ── 設定 ── */
-  let BACKEND = 'https://lochen5511.ngrok-free.app'; // 預設值
+  let BACKEND = 'https://your-tunnel.trycloudflare.com'; // 預設值
 
   async function loadConfig() {
     try {
@@ -513,10 +513,7 @@
     try {
       await fetch(`${BACKEND}${path}`, {
         method:  'POST',
-        headers: {
-          'Content-Type':          'application/json',
-          'bypass-tunnel-reminder': 'true',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -539,7 +536,7 @@
   setInterval(async () => {
     if (!sessionId) return;
     try {
-      const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}&ngrok-skip-browser-warning=true`);
+      const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
       const data = await res.json();
 
       if (data.message) {
@@ -581,10 +578,7 @@
   async function post_r(path, body) {
     return fetch(`${BACKEND}${path}`, {
       method:  'POST',
-      headers: {
-        'Content-Type':          'application/json',
-        'bypass-tunnel-reminder': 'true',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   }

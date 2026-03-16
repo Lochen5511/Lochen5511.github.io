@@ -17,8 +17,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 def cors_headers(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, bypass-tunnel-reminder'
-    response.headers['bypass-tunnel-reminder']       = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
 # ──────────────────────────────────────────
