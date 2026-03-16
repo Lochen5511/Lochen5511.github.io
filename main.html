@@ -535,11 +535,11 @@
     window.location.href = 'enter.html';
   }
 
-  /* ── Poll（每秒，純 GET）── */
+  /* ── Poll（每秒）── */
   setInterval(async () => {
     if (!sessionId) return;
     try {
-      const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
+      const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}&ngrok-skip-browser-warning=true`);
       const data = await res.json();
 
       if (data.message) {
