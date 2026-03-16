@@ -240,7 +240,7 @@ def ask_question(q, index, total):
     time.sleep(0.3)
     send_buttons(
         labels     = ['1 分', '2 分', '3 分', '4 分', '5 分'],
-        colors     = ['gray', 'gray', 'gold', 'gold', 'gold'],
+        colors     = ['gray', 'gray', 'gray', 'gray', 'gray'],
         size       = 'small',
         button_ids = ['conf_1', 'conf_2', 'conf_3', 'conf_4', 'conf_5']
     )

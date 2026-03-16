@@ -565,12 +565,12 @@
       const res  = await post_r('/greeting', { username: userName, session_id: sessionId });
       const data = await res.json();
       removeTyping();
-      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面，或聯絡助教)\n助教信箱：u11301126@go.utaipei.edu.tw';
       appendMsg(reply, 'ai');
       logMsg('ai', reply);
     } catch (e) {
       removeTyping();
-      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面，或聯絡助教)\n助教信箱：u11301126@go.utaipei.edu.tw';
       appendMsg(fallback, 'ai');
     }
   });

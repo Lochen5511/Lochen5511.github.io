@@ -101,7 +101,7 @@ def greeting():
     else:
         print(f"[greeting] session={session_id} 已啟動，跳過")
 
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面，或聯絡助教)\n助教信箱：u11301126@go.utaipei.edu.tw'
     return jsonify({'reply': reply})
 
 
