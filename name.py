@@ -30,7 +30,8 @@ thinking_states   = {}
 user_input_queues = defaultdict(list)
 launched_sessions = set()
 last_seen         = {}
-interrupted       = set()   # 已被 ID 輸入中斷的 session
+interrupted       = set()
+input_locked      = set()   # 聊天框鎖定的 session（按鈕出現時）
 
 USER_TIMEOUT = 300
 
@@ -162,6 +163,26 @@ def greeting():
     return jsonify({'reply': reply})
 
 
+# ── /lock_input ─────────────────────────
+@app.route('/lock_input', methods=['POST', 'OPTIONS'])
+def lock_input():
+    """button.py 呼叫，鎖定或解鎖聊天框"""
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    session_id = data.get('session_id', '')
+    locked     = data.get('locked', False)
+
+    if locked:
+        input_locked.add(session_id)
+    else:
+        input_locked.discard(session_id)
+
+    print(f"[lock_input] session={session_id} locked={locked}")
+    return jsonify({'success': True})
+
+
 # ── /update_unit ────────────────────────
 @app.route('/update_unit', methods=['POST', 'OPTIONS'])
 def update_unit():
@@ -215,9 +236,9 @@ def poll():
     if queue:
         text = queue.pop(0)
         print(f"[poll] session={session_id} 取出訊息 text={text[:40]}")
-        return jsonify({'message': text, 'thinking': False})
+        return jsonify({'message': text, 'thinking': False, 'input_locked': session_id in input_locked})
 
-    return jsonify({'message': None, 'thinking': is_thinking})
+    return jsonify({'message': None, 'thinking': is_thinking, 'input_locked': session_id in input_locked})
 
 
 # ── /check_online ───────────────────────
@@ -276,7 +297,7 @@ def chat():
     log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
     write_log(log_path, f"用戶：{message}")
 
-    # ── 偵測 ID 輸入（長度 15，格式 YYYYMMDD_HHMMSS）──
+    # ── 偵測 ID 輸入（格式 YYYYMMDD_HHMMSS）──
     import re
     if re.fullmatch(r'\d{8}_\d{6}', message.strip()):
         input_id = message.strip()
@@ -306,7 +327,11 @@ def chat():
 
         return jsonify({'reply': ''})
 
-    # 一般訊息
+    # 一般訊息：若聊天框鎖定則忽略
+    if session_id in input_locked:
+        print(f"[chat] session={session_id} 輸入框鎖定，忽略訊息: {message[:40]}")
+        return jsonify({'reply': ''})
+
     user_input_queues[session_id].append(message)
     print(f"[chat] session={session_id} message={message[:40]}")
     return jsonify({'reply': ''})

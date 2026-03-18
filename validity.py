@@ -37,6 +37,12 @@ def send(text, delay=0):
     except Exception as e:
         print(f"[送出失敗] {e}")
 
+def _lock(locked: bool):
+    try:
+        requests.post('http://localhost:5000/lock_input', json={
+            'session_id': session_id, 'locked': locked}, timeout=5)
+    except: pass
+
 def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button_ids=None):
     if delay > 0:
         _set_thinking(True); time.sleep(delay); _set_thinking(False)
@@ -52,6 +58,7 @@ def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button
         requests.post('http://localhost:5000/push', json={
             'text': f'__BUTTONS__{parts}', 'username': username,
             'session_id': session_id, 'log_path': ''})
+        _lock(True)  # 按鈕出現後鎖定
     except Exception as e:
         print(f"[多按鈕失敗] {e}")
 
@@ -84,6 +91,7 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
                                params={'session_id': session_id})
             data = res.json()
             if data.get('message'):
+                _lock(False)  # 收到回應後解鎖
                 return data['message']
         except: pass
         time.sleep(interval)

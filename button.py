@@ -81,7 +81,7 @@ def send_alert(message: str):
 def send_button(label: str, delay: float = 0,
                 color: str = 'gold', size: str = 'medium',
                 button_id: str = ''):
-    """發送一個可點擊的按鈕"""
+    """發送一個可點擊的按鈕，並鎖定聊天框"""
     if delay > 0:
         _thinking(True)
         time.sleep(delay)
@@ -94,6 +94,7 @@ def send_button(label: str, delay: float = 0,
         'session_id': session_id,
         'log_path':   '',
     })
+    _lock(True)
     print(f"[button] {label}  id={bid}")
 
 
@@ -124,24 +125,37 @@ def send_buttons(labels: list, delay: float = 0,
         'session_id': session_id,
         'log_path':   '',
     })
+    _lock(True)
     print(f"[buttons] {labels}")
 
 
 # ──────────────────────────────────────────
 # wait_for_user：等待用戶回應
 # ──────────────────────────────────────────
-def wait_for_user(interval: float = 0.5, timeout: int = 300) -> str | None:
+def wait_for_user(interval: float = 0.5, timeout: int = 300, wait_limit: int = None) -> str | None:
     """
     等待用戶回應。
-    若超時視為離開回傳 None。
-    若被 ID 輸入中斷回傳 '__INTERRUPTED__'。
+    timeout   : 無 /poll 超過此秒數視為離線，回傳 None
+    wait_limit: 等待作答的上限秒數（不管是否在線），超過回傳 None
+                預設 None 表示無上限
     """
+    import time as _time
+    start = _time.time()
+
     while True:
+        # 等待上限檢查
+        if wait_limit and (_time.time() - start) > wait_limit:
+            print(f"[wait_for_user] 等待超時 wait_limit={wait_limit}s")
+            _write_log(f'[逾時] 等待作答超過 {wait_limit} 秒，流程中斷')
+            _lock(False)
+            return None
+
         # 檢查是否被中斷
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
             print(f"[wait_for_user] session={session_id} 被 ID 輸入中斷")
             _write_log('[中斷] 用戶輸入 ID，流程中斷')
+            _lock(False)
             return '__INTERRUPTED__'
 
         # 檢查是否在線
@@ -149,12 +163,14 @@ def wait_for_user(interval: float = 0.5, timeout: int = 300) -> str | None:
         if not online.get('online', True):
             print(f"[wait_for_user] 用戶已離開 session={session_id}")
             _write_log('用戶已離開系統')
+            _lock(False)
             return None
 
         # 取得用戶輸入
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
+            _lock(False)
             print(f"[user] {msg[:60]}")
             return msg
 
@@ -175,6 +191,10 @@ def update_unit(unit: str):
     """更新 session 庫中的單元記錄"""
     _post('/update_unit', {'session_id': session_id, 'unit': unit})
     print(f"[unit] 記錄單元={unit}")
+
+def _lock(locked: bool):
+    """鎖定或解鎖聊天框"""
+    _post('/lock_input', {'session_id': session_id, 'locked': locked})
 
 
 # ──────────────────────────────────────────

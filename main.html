@@ -552,6 +552,12 @@
       } else if (!data.thinking && typingBubble) {
         removeTyping();
       }
+
+      // 根據鎖定狀態控制輸入框
+      const locked = data.input_locked === true;
+      input.disabled    = locked;
+      sendBtn.disabled  = locked;
+      input.placeholder = locked ? '請點擊上方按鈕作答…' : '輸入訊息…';
     } catch (e) {
       console.warn('[poll]', e.message);
     }
@@ -565,12 +571,12 @@
       const res  = await post_r('/greeting', { username: userName, session_id: sessionId });
       const data = await res.json();
       removeTyping();
-      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面，或聯絡助教)\n助教信箱：u11301126@go.utaipei.edu.tw';
+      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(reply, 'ai');
       logMsg('ai', reply);
     } catch (e) {
       removeTyping();
-      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面，或聯絡助教)\n助教信箱：u11301126@go.utaipei.edu.tw';
+      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(fallback, 'ai');
     }
   });
