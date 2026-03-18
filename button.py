@@ -130,15 +130,51 @@ def send_buttons(labels: list, delay: float = 0,
 # ──────────────────────────────────────────
 # wait_for_user：等待用戶回應
 # ──────────────────────────────────────────
-def wait_for_user(interval: float = 0.5) -> str:
-    """阻塞直到用戶發送訊息或點擊按鈕，回傳用戶說的話"""
+def wait_for_user(interval: float = 0.5, timeout: int = 300) -> str | None:
+    """
+    等待用戶回應。
+    若超時視為離開回傳 None。
+    若被 ID 輸入中斷回傳 '__INTERRUPTED__'。
+    """
     while True:
+        # 檢查是否被中斷
+        interrupted = _get('/check_interrupted', {'session_id': session_id})
+        if interrupted.get('interrupted', False):
+            print(f"[wait_for_user] session={session_id} 被 ID 輸入中斷")
+            _write_log('[中斷] 用戶輸入 ID，流程中斷')
+            return '__INTERRUPTED__'
+
+        # 檢查是否在線
+        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
+        if not online.get('online', True):
+            print(f"[wait_for_user] 用戶已離開 session={session_id}")
+            _write_log('用戶已離開系統')
+            return None
+
+        # 取得用戶輸入
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
             print(f"[user] {msg[:60]}")
             return msg
+
         time.sleep(interval)
+
+
+def _write_log(content: str):
+    """寫入 log 檔"""
+    if not log_path:
+        return
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
+
+def update_unit(unit: str):
+    """更新 session 庫中的單元記錄"""
+    _post('/update_unit', {'session_id': session_id, 'unit': unit})
+    print(f"[unit] 記錄單元={unit}")
 
 
 # ──────────────────────────────────────────
@@ -147,13 +183,11 @@ def wait_for_user(interval: float = 0.5) -> str:
 def main():
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
-    send(f'你好，{username}！歡迎登入AI數位孿生學習夥伴系統！', delay=2)
-    send('接下來，讓我們來一起提升學習評量的專業能力吧！', delay=0.5)
-    send('自我介紹一下，我是接下來將帶領你進行人機協作學習任務的主持人，艾評。', delay=0.5)
-    send('我會協助你精熟職前教師在學習評量課程中，必備測驗統計概念的知識點', delay=0.5)
-    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=0.5)
-    send('待會，你會完成8題選擇題，每次作答後，評價自己對這個答案的信心。', delay=0.5)
-    send('在你準備好後，就按下開始吧！', delay=0.2)
+    send(f'你好，{username}！我是艾評。', delay=3)
+    send('歡迎來到本系統。', delay=1)
+    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=1)
+    send('待會，你會完成8題選擇題，每次作答後，評價自己對這個答案的信心。', delay=2)
+    send('在你準備好後，就按下開始吧！', delay=1)
 
     send_buttons(
         labels     = ['效度', '信度'],
@@ -164,15 +198,27 @@ def main():
 
     user_reply = wait_for_user()
 
+    # 用戶已離開
+    if user_reply is None:
+        print("[button.py] 用戶已離開，結束流程")
+        return
+
+    # 流程被 ID 輸入中斷
+    if user_reply == '__INTERRUPTED__':
+        print("[button.py] 流程被中斷")
+        return
+
     import os as _os
     base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
 
     if 'btn_validity' in user_reply:
+        update_unit('效度')
         import subprocess
         subprocess.Popen(['python', 'validity.py'] + base_args,
                          cwd=_os.path.dirname(_os.path.abspath(__file__)))
 
     elif 'btn_reliability' in user_reply:
+        update_unit('信度')
         import subprocess
         subprocess.Popen(['python', 'reliability.py'] + base_args,
                          cwd=_os.path.dirname(_os.path.abspath(__file__)))

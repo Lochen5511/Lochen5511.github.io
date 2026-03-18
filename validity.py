@@ -55,8 +55,30 @@ def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button
     except Exception as e:
         print(f"[多按鈕失敗] {e}")
 
-def wait_for_user(interval=0.5):
+USER_TIMEOUT = 300
+
+def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
+    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
+        # 檢查是否被中斷
+        try:
+            res = requests.get('http://localhost:5000/check_interrupted',
+                               params={'session_id': session_id})
+            if res.json().get('interrupted', False):
+                write_log('[中斷] 用戶輸入 ID，流程中斷')
+                return '__INTERRUPTED__'
+        except: pass
+
+        # 檢查是否在線
+        try:
+            res = requests.get('http://localhost:5000/check_online',
+                               params={'session_id': session_id, 'timeout': timeout})
+            if not res.json().get('online', True):
+                write_log('用戶已離開系統')
+                return None
+        except: pass
+
+        # 取得用戶輸入
         try:
             res = requests.get('http://localhost:5000/fetch_user_input',
                                params={'session_id': session_id})
@@ -231,7 +253,10 @@ def ask_question(q, index, total):
         button_ids = [f'ans_{k}' for k in q['options'].keys()]
     )
 
-    ans_reply  = wait_for_user()
+    ans_reply = wait_for_user()
+    if ans_reply is None or ans_reply == '__INTERRUPTED__':
+        return ans_reply  # 傳遞中斷／離開狀態
+
     chosen_key = ans_reply.split(':')[0].replace('ans_', '').strip()
     print(f"[作答] item={q['item_id']} answer={chosen_key}")
 
@@ -240,13 +265,16 @@ def ask_question(q, index, total):
     time.sleep(0.3)
     send_buttons(
         labels     = ['1 分', '2 分', '3 分', '4 分', '5 分'],
-        colors     = ['gray', 'gray', 'gray', 'gray', 'gray'],
+        colors     = ['gray', 'gray', 'gold', 'gold', 'gold'],
         size       = 'small',
         button_ids = ['conf_1', 'conf_2', 'conf_3', 'conf_4', 'conf_5']
     )
 
     conf_reply = wait_for_user()
-    confidence = int(conf_reply.split(':')[0].replace('conf_', '').strip())
+    if conf_reply is None or conf_reply == '__INTERRUPTED__':
+        return conf_reply
+
+    confidence   = int(conf_reply.split(':')[0].replace('conf_', '').strip())
     print(f"[信心] item={q['item_id']} confidence={confidence}")
 
     is_correct   = (chosen_key == q['key'])
@@ -281,6 +309,17 @@ def main():
 
     for i, q in enumerate(QUESTIONS, start=1):
         result = ask_question(q, i, total)
+
+        # 用戶中途離開或被中斷
+        if result is None or result == '__INTERRUPTED__':
+            if result == '__INTERRUPTED__':
+                write_log(f'[中斷] 用戶於第 {i}/{total} 題輸入 ID，流程中斷')
+                print(f"[validity.py] 第 {i} 題被中斷")
+            else:
+                write_log(f'[中斷] 用戶於第 {i}/{total} 題離開')
+                print(f"[validity.py] 用戶於第 {i} 題離開")
+            return
+
         results.append(result)
         time.sleep(0.5)
 
@@ -293,6 +332,7 @@ def main():
         f'平均把握度 {avg_conf:.1f} 分。'
     )
     send(summary, delay=1)
+    send(f'你的學習 ID 是：{session_id}\n請保存此 ID，下次回來時輸入即可繼續。', delay=1)
 
     write_log(
         f'[摘要] correct={correct_count}/{total} | '
