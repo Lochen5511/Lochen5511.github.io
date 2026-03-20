@@ -18,7 +18,8 @@ log_path   = args.log_path
 
 print(f"[set_que.py] 啟動  user={username}  session={session_id}")
 
-BACKEND = 'http://localhost:5000'
+BACKEND      = 'http://localhost:5000'
+USER_TIMEOUT = 300
 
 
 # ──────────────────────────────────────────
@@ -40,6 +41,9 @@ def _get(path, params=None):
 
 def _thinking(state):
     _post('/thinking', {'username': username, 'session_id': session_id, 'thinking': state})
+
+def _lock(locked):
+    _post('/lock_input', {'session_id': session_id, 'locked': locked})
 
 def send(text, delay=0):
     if delay > 0:
@@ -66,31 +70,41 @@ def send_buttons(labels, delay=0, colors=None, size='medium',
         'text': f'__BUTTONS__{parts}', 'username': username,
         'session_id': session_id, 'log_path': '',
     })
+    _lock(True)
+    print(f"[buttons] {labels}")
 
-def send_dropdown(options: list, placeholder: str = '請選擇…',
-                  dropdown_id: str = 'dropdown', delay: float = 0):
-    """發送下拉選單，並鎖定文字輸入框"""
+def send_dropdown(options, placeholder='請選擇…',
+                  dropdown_id='dropdown', delay=0):
     if delay > 0:
         _thinking(True); time.sleep(delay); _thinking(False)
     parts = '||'.join(options)
     _post('/push', {
-        'text':       f'__DROPDOWN__{dropdown_id}||{placeholder}||{parts}',
-        'username':   username,
-        'session_id': session_id,
-        'log_path':   '',
+        'text': f'__DROPDOWN__{dropdown_id}||{placeholder}||{parts}',
+        'username': username, 'session_id': session_id, 'log_path': '',
     })
-    _post('/lock_input', {'session_id': session_id, 'locked': True})
+    _lock(True)
     print(f"[dropdown] {options}")
+
+def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
+    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
+        interrupted = _get('/check_interrupted', {'session_id': session_id})
+        if interrupted.get('interrupted', False):
+            write_log('[中斷] 用戶輸入 ID，流程中斷')
+            return '__INTERRUPTED__'
+
         online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
         if not online.get('online', True):
             write_log('用戶已離開系統')
             return None
+
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
+            _lock(False)
             print(f"[user] {msg[:60]}")
             return msg
+
         time.sleep(interval)
 
 def write_log(content):
@@ -130,7 +144,7 @@ def main():
     send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
 
     send_dropdown(
-        options      = [
+        options     = [
             '內容效度',
             '表面效度',
             '同時效度',
@@ -138,9 +152,8 @@ def main():
             '建構效度（因素分析／聚斂區別）',
             '信度—效度關係（必要但不充分）',
         ],
-        placeholder  = '請選擇概念標籤…',
-        dropdown_id  = 'dd_concept',
-        delay        = 0,
+        placeholder = '請選擇概念標籤…',
+        dropdown_id = 'dd_concept',
     )
 
     concept = wait_for_user()
