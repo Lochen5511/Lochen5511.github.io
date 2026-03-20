@@ -327,6 +327,28 @@ def thinking():
     return jsonify({'success': True})
 
 
+# ── /button_click（按鈕點擊，不受鎖定影響）──
+@app.route('/button_click', methods=['POST', 'OPTIONS'])
+def button_click():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    message    = data.get('message', '').strip()
+    session_id = data.get('session_id', '')
+    username   = data.get('username', '未知').strip()
+
+    if not message:
+        return jsonify({'reply': ''}), 400
+
+    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    write_log(log_path, f"用戶：{message}")
+
+    user_input_queues[session_id].append(message)
+    print(f"[button_click] session={session_id} message={message[:40]}")
+    return jsonify({'reply': ''})
+
+
 # ── /chat ───────────────────────────────
 @app.route('/chat', methods=['POST', 'OPTIONS'])
 def chat():

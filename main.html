@@ -547,7 +547,7 @@
     appendMsg(val, 'user');
     logMsg('user', val);
 
-    post('/chat', {
+    post('/button_click', {
       message:    val,
       username:   userName,
       session_id: sessionId,
@@ -569,7 +569,7 @@
     typingBubble = appendTyping();
     logMsg('user', `[按鈕:${buttonId}] ${label}`);
 
-    post('/chat', {
+    post('/button_click', {
       message:    `${buttonId}:${label}`,
       username:   userName,
       session_id: sessionId,

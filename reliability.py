@@ -1,7 +1,6 @@
 import argparse
 import time
 import requests
-from datetime import datetime
 import os
 
 # ──────────────────────────────────────────
@@ -17,70 +16,101 @@ username   = args.username
 session_id = args.session_id
 log_path   = args.log_path
 
+print(f"[reliability.py] 啟動  user={username}  session={session_id}")
+
+BACKEND = 'http://localhost:5000'
+USER_TIMEOUT = 300
+
 
 # ──────────────────────────────────────────
-# 工具函數（與 button.py 相同）
+# 工具函數
 # ──────────────────────────────────────────
 def _set_thinking(state):
     try:
-        requests.post('http://localhost:5000/thinking', json={
-            'username': username, 'session_id': session_id, 'thinking': state})
+        requests.post(f'{BACKEND}/thinking', json={
+            'username': username, 'session_id': session_id, 'thinking': state}, timeout=5)
+    except: pass
+
+def _lock(locked):
+    try:
+        requests.post(f'{BACKEND}/lock_input', json={
+            'session_id': session_id, 'locked': locked}, timeout=5)
     except: pass
 
 def send(text, delay=0):
     if delay > 0:
         _set_thinking(True); time.sleep(delay); _set_thinking(False)
     try:
-        requests.post('http://localhost:5000/push', json={
+        requests.post(f'{BACKEND}/push', json={
             'text': text, 'username': username,
-            'session_id': session_id, 'log_path': log_path})
+            'session_id': session_id, 'log_path': log_path}, timeout=5)
     except Exception as e:
         print(f"[送出失敗] {e}")
 
 def send_alert(message):
     try:
-        requests.post('http://localhost:5000/push', json={
+        requests.post(f'{BACKEND}/push', json={
             'text': f'__ALERT__{message}', 'username': username,
-            'session_id': session_id, 'log_path': ''})
+            'session_id': session_id, 'log_path': ''}, timeout=5)
     except Exception as e:
         print(f"[alert 失敗] {e}")
-
-def send_button(label, delay=0, color='gold', size='medium', button_id=''):
-    if delay > 0:
-        _set_thinking(True); time.sleep(delay); _set_thinking(False)
-    bid = button_id if button_id else label
-    try:
-        requests.post('http://localhost:5000/push', json={
-            'text': f'__BUTTON__{label}||{color}||{size}||{bid}',
-            'username': username, 'session_id': session_id, 'log_path': ''})
-    except Exception as e:
-        print(f"[按鈕失敗] {e}")
 
 def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button_ids=None):
     if delay > 0:
         _set_thinking(True); time.sleep(delay); _set_thinking(False)
-    n = len(labels)
-    colors = colors or ['gold'] * n
+    n          = len(labels)
+    colors     = colors     or ['gold'] * n
     button_ids = button_ids or labels
-    size_list = sizes if sizes else [size] * n
-    parts = ';'.join(f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}' for i in range(n))
+    size_list  = sizes if sizes else [size] * n
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
     try:
-        requests.post('http://localhost:5000/push', json={
+        requests.post(f'{BACKEND}/push', json={
             'text': f'__BUTTONS__{parts}', 'username': username,
-            'session_id': session_id, 'log_path': ''})
+            'session_id': session_id, 'log_path': ''}, timeout=5)
+        _lock(True)
     except Exception as e:
         print(f"[多按鈕失敗] {e}")
 
-def wait_for_user(interval=0.5):
+def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
+    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
         try:
-            res = requests.get('http://localhost:5000/fetch_user_input',
-                               params={'session_id': session_id})
+            res = requests.get(f'{BACKEND}/check_interrupted',
+                               params={'session_id': session_id}, timeout=5)
+            if res.json().get('interrupted', False):
+                write_log('[中斷] 用戶輸入 ID，流程中斷')
+                return '__INTERRUPTED__'
+        except: pass
+
+        try:
+            res = requests.get(f'{BACKEND}/check_online',
+                               params={'session_id': session_id, 'timeout': timeout}, timeout=5)
+            if not res.json().get('online', True):
+                write_log('用戶已離開系統')
+                return None
+        except: pass
+
+        try:
+            res = requests.get(f'{BACKEND}/fetch_user_input',
+                               params={'session_id': session_id}, timeout=5)
             data = res.json()
             if data.get('message'):
+                _lock(False)
                 return data['message']
         except: pass
         time.sleep(interval)
+
+def write_log(content):
+    if not log_path:
+        return
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
 
 
 # ──────────────────────────────────────────
@@ -91,24 +121,27 @@ def main():
 
     send_alert('很抱歉，此單元尚在開發中，請返回選擇其他選項。')
 
-    # 彈出視窗關閉後，重新發送選擇按鈕
+    time.sleep(0.5)
     send_buttons(
         labels     = ['效度', '信度'],
         colors     = ['gray', 'blue'],
         size       = 'small',
-        button_ids = ['validity.py', 'btn_reliability']
+        button_ids = ['btn_validity', 'btn_reliability']
     )
 
     user_reply = wait_for_user()
+    if user_reply is None or user_reply == '__INTERRUPTED__':
+        return
+
     print(f"[用戶點擊] {user_reply}")
 
-    import subprocess
     base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
-    if 'btn_reliability' in user_reply:
-        subprocess.Popen(['python', 'reliability.py'] + base_args,
-                         cwd=os.path.dirname(os.path.abspath(__file__)))
-    elif 'validity.py' in user_reply:
+    import subprocess
+    if 'btn_validity' in user_reply:
         subprocess.Popen(['python', 'validity.py'] + base_args,
+                         cwd=os.path.dirname(os.path.abspath(__file__)))
+    elif 'btn_reliability' in user_reply:
+        subprocess.Popen(['python', 'reliability.py'] + base_args,
                          cwd=os.path.dirname(os.path.abspath(__file__)))
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
