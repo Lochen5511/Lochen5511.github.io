@@ -67,7 +67,20 @@ def send_buttons(labels, delay=0, colors=None, size='medium',
         'session_id': session_id, 'log_path': '',
     })
 
-def wait_for_user(interval=0.5, timeout=300):
+def send_dropdown(options: list, placeholder: str = '請選擇…',
+                  dropdown_id: str = 'dropdown', delay: float = 0):
+    """發送下拉選單，並鎖定文字輸入框"""
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    parts = '||'.join(options)
+    _post('/push', {
+        'text':       f'__DROPDOWN__{dropdown_id}||{placeholder}||{parts}',
+        'username':   username,
+        'session_id': session_id,
+        'log_path':   '',
+    })
+    _post('/lock_input', {'session_id': session_id, 'locked': True})
+    print(f"[dropdown] {options}")
     while True:
         online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
         if not online.get('online', True):
@@ -96,13 +109,44 @@ def write_log(content):
 def main():
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
-    send("> 檢測到ID輸入，正在檢索記錄......", delay=0.5)
     send((
         f'嗨，{username}歡迎回來。我們進到下一步了。\n'
         '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
         '我會用三個小關卡帶你走。\n'
         '你不用一次就寫得很完美，只要一關一關完成就好。'
-    ), delay=5)
+    ), delay=1)
+
+    send_buttons(
+        labels     = ['開始命題'],
+        colors     = ['gold'],
+        size       = 'medium',
+        button_ids = ['btn_start_que']
+    )
+
+    user_reply = wait_for_user()
+    if user_reply is None or user_reply == '__INTERRUPTED__':
+        return
+
+    send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
+
+    send_dropdown(
+        options      = [
+            '內容效度',
+            '表面效度',
+            '同時效度',
+            '預測效度',
+            '建構效度（因素分析／聚斂區別）',
+            '信度—效度關係（必要但不充分）',
+        ],
+        placeholder  = '請選擇概念標籤…',
+        dropdown_id  = 'dd_concept',
+        delay        = 0,
+    )
+
+    concept = wait_for_user()
+    if concept is None or concept == '__INTERRUPTED__':
+        return
+    print(f"[set_que] 概念標籤={concept}")
 
     # ↑↑↑ 在這裡加入你的代碼 ↑↑↑
     print("[set_que.py] 執行完畢")

@@ -151,6 +151,37 @@
       font-size: 11px; color: var(--muted);
       margin-top: 4px; opacity: 0.65; letter-spacing: 0.08em;
     }
+    /* ── Dropdown ── */
+    .msg-dropdown {
+      margin-top: 6px;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .msg-dropdown select {
+      background: var(--surface2);
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      color: var(--cream);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 14px;
+      padding: 8px 12px;
+      cursor: pointer;
+      outline: none;
+      min-width: 200px;
+      transition: border-color 0.2s;
+    }
+    .msg-dropdown select:focus { border-color: var(--gold-dim); }
+    .msg-dropdown select option { background: var(--surface2); }
+    .msg-dropdown select:disabled { opacity: 0.4; cursor: default; }
+    .msg-dropdown .dd-confirm {
+      padding: 8px 20px; border-radius: 8px;
+      border: 1px solid var(--gold); background: transparent;
+      color: var(--gold); font-family: 'Noto Serif TC', serif;
+      font-size: 13px; letter-spacing: 0.1em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .msg-dropdown .dd-confirm:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
+    .msg-dropdown .dd-confirm:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
     .msg.user .msg-time { text-align: right; }
 
     /* ── Typing indicator ── */
@@ -416,11 +447,28 @@
     removeEmpty();
     const label = role === 'user' ? userName : 'AI';
 
-    const isButton  = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
-    const isButtons = text.startsWith('__BUTTONS__');
+    const isButton   = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
+    const isButtons  = text.startsWith('__BUTTONS__');
+    const isDropdown = text.startsWith('__DROPDOWN__');
     let content = '';
 
-    if (isButtons) {
+    if (isDropdown) {
+      const raw   = text.replace('__DROPDOWN__', '');
+      const parts = raw.split('||');
+      const ddId  = parts[0] || 'dropdown';
+      const placeholder = parts[1] || '請選擇…';
+      const options = parts.slice(2);
+      const opts = options.map(o =>
+        `<option value="${escHtml(o)}">${escHtml(o)}</option>`
+      ).join('');
+      content = `<div class="msg-dropdown" id="ddwrap_${ddId}">
+        <select id="sel_${ddId}">
+          <option value="" disabled selected>${placeholder}</option>
+          ${opts}
+        </select>
+        <button class="dd-confirm" onclick="confirmDropdown('${ddId}')">確認</button>
+      </div>`;
+    } else if (isButtons) {
       const groupId = 'grp_' + Date.now();
       const parts   = text.replace('__BUTTONS__', '').split(';');
       const btns    = parts.map(p => {
@@ -484,6 +532,26 @@
 
   function removeTyping() {
     if (typingBubble) { typingBubble.remove(); typingBubble = null; }
+  }
+
+  function confirmDropdown(ddId) {
+    const sel = document.getElementById(`sel_${ddId}`);
+    const val = sel ? sel.value : '';
+    if (!val) return;
+
+    // 鎖定
+    sel.disabled = true;
+    const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
+    if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
+
+    appendMsg(val, 'user');
+    logMsg('user', val);
+
+    post('/chat', {
+      message:    val,
+      username:   userName,
+      session_id: sessionId,
+    });
   }
 
   /* ── Button click ── */

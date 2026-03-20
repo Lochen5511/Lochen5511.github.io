@@ -340,7 +340,23 @@ def main():
         f'平均把握度 {avg_conf:.1f} 分。'
     )
     send(summary, delay=1)
-    send(f'你的學習 ID 是：{session_id}\n請保存此 ID，下次回來時輸入即可繼續。', delay=1)
+
+    # 產生並發送隨機 ID
+    try:
+        res = requests.post('http://localhost:5000/generate_return_id',
+                            json={'session_id': session_id}, timeout=5)
+        return_id = res.json().get('return_id', '')
+    except Exception as e:
+        print(f"[return_id 產生失敗] {e}")
+        return_id = ''
+
+    if return_id:
+        send(
+            f'你的學習 ID 是：{return_id}\n'
+            '請記下這組 ID，下次回來時在聊天框輸入即可繼續下一階段。',
+            delay=1
+        )
+        write_log(f'[ID] return_id={return_id}')
 
     write_log(
         f'[摘要] correct={correct_count}/{total} | '

@@ -62,10 +62,11 @@ def register_session(username: str, session_id: str, log_path: str):
     """登記新 session 到庫"""
     db = load_db()
     db[session_id] = {
-        'username': username,
-        'log_path': log_path,
-        'created':  datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'unit':     None,  # 待填入
+        'username':  username,
+        'log_path':  log_path,
+        'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'unit':      None,
+        'return_id': None,  # 完成後發給用戶的隨機 ID
     }
     save_db(db)
     print(f"[db] 登記 session={session_id} user={username}")
@@ -77,6 +78,39 @@ def update_session_unit(session_id: str, unit: str):
         db[session_id]['unit'] = unit
         save_db(db)
         print(f"[db] 更新 session={session_id} unit={unit}")
+
+def generate_return_id(session_id: str) -> str:
+    """產生隨機 6 碼英數 ID，寫入庫並建立反查索引"""
+    import random, string
+    db = load_db()
+
+    # 產生不重複的 6 碼 ID
+    existing = {v.get('return_id') for v in db.values() if v.get('return_id')}
+    while True:
+        rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if rid not in existing:
+            break
+
+    if session_id in db:
+        db[session_id]['return_id'] = rid
+
+    # 建立反查索引：return_id -> session_id
+    if '__return_index__' not in db:
+        db['__return_index__'] = {}
+    db['__return_index__'][rid] = session_id
+
+    save_db(db)
+    print(f"[db] 產生 return_id={rid} for session={session_id}")
+    return rid
+
+def lookup_return_id(return_id: str) -> dict | None:
+    """用 return_id 查找對應的 session 記錄"""
+    db = load_db()
+    index = db.get('__return_index__', {})
+    session_id = index.get(return_id)
+    if session_id:
+        return db.get(session_id)
+    return None
 
 def lookup_session(session_id: str) -> dict | None:
     """查找 session，回傳 {'username', 'log_path'} 或 None"""
@@ -161,6 +195,19 @@ def greeting():
 
     reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
     return jsonify({'reply': reply})
+
+
+# ── /generate_return_id ─────────────────
+@app.route('/generate_return_id', methods=['POST', 'OPTIONS'])
+def gen_return_id():
+    """validity.py 完成後呼叫，產生隨機 ID 回傳"""
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    session_id = data.get('session_id', '')
+    rid        = generate_return_id(session_id)
+    return jsonify({'return_id': rid})
 
 
 # ── /lock_input ─────────────────────────
@@ -297,33 +344,32 @@ def chat():
     log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
     write_log(log_path, f"用戶：{message}")
 
-    # ── 偵測 ID 輸入（格式 YYYYMMDD_HHMMSS）──
+    # ── 偵測 ID 輸入（6 碼英數大寫）──
     import re
-    if re.fullmatch(r'\d{8}_\d{6}', message.strip()):
-        input_id = message.strip()
-        record   = lookup_session(input_id)
+    if re.fullmatch(r'[A-Z0-9]{6}', message.strip().upper()):
+        input_id = message.strip().upper()
+        record   = lookup_return_id(input_id)
 
         if record:
-            # 找到記錄：標記中斷，啟動 set_que.py
             target_username = record['username']
             target_log_path = record['log_path']
+            target_session  = record.get('session_id', session_id)
 
+            user_input_queues[session_id].clear()
             interrupted.add(session_id)
-            write_log(target_log_path, f'[ID 驗證] 用戶 {username} 以 ID {input_id} 重新進入')
+            write_log(target_log_path, f'[ID 驗證] 用戶以 ID {input_id} 重新進入')
 
             threading.Thread(
                 target=launch_script,
-                args=('set_que.py', target_username, input_id, target_log_path),
+                args=('set_que.py', target_username, session_id, target_log_path),
                 daemon=True
             ).start()
-            print(f"[chat] ID 驗證成功 input_id={input_id} → 啟動 set_que.py")
+            print(f"[chat] return_id 驗證成功 {input_id} → 啟動 set_que.py")
 
         else:
-            # 找不到記錄
             message_queues[session_id].append('未找到記錄，請聯絡助教。')
-            # 標記此 session 停止回應
             interrupted.add(session_id)
-            print(f"[chat] ID 未找到 input_id={input_id}")
+            print(f"[chat] return_id 未找到 {input_id}")
 
         return jsonify({'reply': ''})
 
