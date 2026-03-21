@@ -88,22 +88,25 @@ def send_dropdown(options, placeholder='請選擇…',
 def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
+        # 先檢查中斷
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
             write_log('[中斷] 用戶輸入 ID，流程中斷')
             return '__INTERRUPTED__'
 
-        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
-        if not online.get('online', True):
-            write_log('用戶已離開系統')
-            return None
-
+        # 先取用戶輸入（優先）
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
             _lock(False)
             print(f"[user] {msg[:60]}")
             return msg
+
+        # 再檢查是否在線
+        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
+        if not online.get('online', True):
+            write_log('用戶已離開系統')
+            return None
 
         time.sleep(interval)
 

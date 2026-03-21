@@ -85,15 +85,25 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
                 return None
         except: pass
 
-        # 取得用戶輸入
+        # 先取用戶輸入（優先）
         try:
             res = requests.get('http://localhost:5000/fetch_user_input',
                                params={'session_id': session_id})
             data = res.json()
             if data.get('message'):
-                _lock(False)  # 收到回應後解鎖
+                _lock(False)
                 return data['message']
         except: pass
+
+        # 再檢查是否在線
+        try:
+            res = requests.get('http://localhost:5000/check_online',
+                               params={'session_id': session_id, 'timeout': timeout})
+            if not res.json().get('online', True):
+                write_log('用戶已離開系統')
+                return None
+        except: pass
+
         time.sleep(interval)
 
 def write_log(content):
