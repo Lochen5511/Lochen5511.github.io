@@ -381,8 +381,13 @@ def chat():
             interrupted.add(session_id)
             write_log(target_log_path, f'[ID 驗證] 用戶以 ID {input_id} 重新進入')
 
+            def launch_and_clear(script, uname, sid, lpath):
+                time.sleep(0.3)
+                interrupted.discard(sid)  # 啟動後移除中斷標記
+                launch_script(script, uname, sid, lpath)
+
             threading.Thread(
-                target=launch_script,
+                target=launch_and_clear,
                 args=('set_que.py', target_username, session_id, target_log_path),
                 daemon=True
             ).start()
