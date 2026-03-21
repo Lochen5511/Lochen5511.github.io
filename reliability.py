@@ -74,7 +74,7 @@ def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button
     except Exception as e:
         print(f"[多按鈕失敗] {e}")
 
-def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
+def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
         try:

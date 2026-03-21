@@ -85,7 +85,7 @@ def send_dropdown(options, placeholder='請選擇…',
     _lock(True)
     print(f"[dropdown] {options}")
 
-def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
+def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
         # 先檢查中斷
