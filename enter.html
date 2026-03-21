@@ -186,6 +186,34 @@
       background: var(--gold); opacity: 0.45;
     }
 
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 20px 0;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px;
+      background: rgba(201,168,76,0.2);
+    }
+    .divider span {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 12px; letter-spacing: 0.2em;
+      color: rgba(245,240,232,0.3);
+    }
+
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 20px 0 16px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px;
+      background: rgba(201,168,76,0.2);
+    }
+    .divider span {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 12px; letter-spacing: 0.2em;
+      color: rgba(245,240,232,0.3);
+    }
+
     @keyframes fadeUp {
       to { opacity: 1; transform: translateY(0); }
     }
@@ -215,6 +243,19 @@
     </div>
 
     <button class="btn" id="enterBtn" onclick="handleEnter()">進&ensp;入</button>
+
+    <div class="divider">
+      <span>或</span>
+    </div>
+
+    <div class="field">
+      <label>Return ID</label>
+      <input type="text" id="idInput" placeholder="輸入學習 ID…"
+             autocomplete="off" maxlength="6" style="text-transform:uppercase"/>
+      <div class="underline"></div>
+    </div>
+
+    <button class="btn" id="idBtn" onclick="handleId()">以&ensp;ID&ensp;進入</button>
 
     <p class="status" id="status">請輸入您的名字才能繼續</p>
     <p class="footer">此系統僅供授權使用者存取</p>
@@ -246,10 +287,20 @@
 
   const nameInput = document.getElementById('nameInput');
   const enterBtn  = document.getElementById('enterBtn');
+  const idInput   = document.getElementById('idInput');
+  const idBtn     = document.getElementById('idBtn');
   const statusEl  = document.getElementById('status');
 
   nameInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') handleEnter();
+  });
+
+  idInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleId();
+  });
+
+  idInput.addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
   });
 
   function showStatus(msg, isInfo = false) {
@@ -312,6 +363,51 @@
     // 跳轉，把 username 和 session_id 帶進 URL
     window.location.href =
       `main.html?username=${encodeURIComponent(name)}&session_id=${encodeURIComponent(sessionId)}`;
+  }
+
+  // ── ID 進入 ──
+  document.getElementById('idInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleId();
+  });
+
+  async function handleId() {
+    const id = document.getElementById('idInput').value.trim().toUpperCase();
+    if (!id) {
+      showStatus('請輸入學習 ID');
+      return;
+    }
+    if (!/^[A-Z0-9]{6}$/.test(id)) {
+      showStatus('ID 格式不正確（6 碼英數字）');
+      return;
+    }
+
+    document.getElementById('idBtn').disabled = true;
+    showStatus('驗證中…', true);
+
+    await loadConfig();
+
+    try {
+      const res = await fetch(`${BACKEND}/enter_id`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ return_id: id }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (data.success) {
+        window.location.href =
+          `main.html?username=${encodeURIComponent(data.username)}&session_id=${encodeURIComponent(data.session_id)}&mode=set_que`;
+      } else {
+        showStatus(data.error || '未找到記錄，請聯絡助教。');
+        document.getElementById('idBtn').disabled = false;
+      }
+    } catch (e) {
+      console.warn('[enter_id 失敗]', e.message);
+      showStatus('連線失敗，請稍後再試。');
+      document.getElementById('idBtn').disabled = false;
+    }
   }
 </script>
 

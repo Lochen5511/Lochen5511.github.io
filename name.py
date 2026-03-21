@@ -30,8 +30,7 @@ thinking_states   = {}
 user_input_queues = defaultdict(list)
 launched_sessions = set()
 last_seen         = {}
-interrupted       = set()
-input_locked      = set()   # 聊天框鎖定的 session（按鈕出現時）
+input_locked      = set()
 
 USER_TIMEOUT = 300
 
@@ -171,6 +170,99 @@ def enter():
     return jsonify({'success': True, 'session_id': session_id})
 
 
+# ── /enter_id ───────────────────────────
+@app.route('/enter_id', methods=['POST', 'OPTIONS'])
+def enter_id():
+    """用 return_id 進入，查找記錄後啟動 set_que.py"""
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data      = request.get_json() or {}
+    return_id = data.get('return_id', '').strip().upper()
+
+    if not return_id:
+        return jsonify({'success': False, 'error': '請輸入 ID'}), 400
+
+    record = lookup_return_id(return_id)
+    if not record:
+        return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
+
+    username = record['username']
+    log_path = record['log_path']
+
+    # 產生新的 session_id 給這次對話
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
+    print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
+
+    return jsonify({
+        'success':    True,
+        'username':   username,
+        'session_id': session_id,
+    })
+
+
+# ── /greeting_set_que ───────────────────
+@app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
+def greeting_set_que():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+
+    # 找到原始 log_path
+    db = load_db()
+    log_path = None
+    for v in db.values():
+        if isinstance(v, dict) and v.get('username') == username:
+            log_path = v.get('log_path', '')
+            break
+    if not log_path:
+        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+
+    if session_id and session_id not in launched_sessions:
+        launched_sessions.add(session_id)
+        threading.Thread(
+            target=launch_script,
+            args=('set_que.py', username, session_id, log_path),
+            daemon=True
+        ).start()
+        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
+
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    return jsonify({'reply': reply})
+
+
+# ── /greeting_set_que ───────────────────
+@app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
+def greeting_set_que():
+    """以 ID 進入時，直接啟動 set_que.py"""
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+
+    if session_id and session_id not in launched_sessions:
+        launched_sessions.add(session_id)
+        threading.Thread(
+            target=launch_script,
+            args=('set_que.py', username, session_id, log_path),
+            daemon=True
+        ).start()
+        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
+    else:
+        print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
+
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    return jsonify({'reply': reply})
+
+
 # ── /greeting ───────────────────────────
 @app.route('/greeting', methods=['POST', 'OPTIONS'])
 def greeting():
@@ -303,17 +395,6 @@ def check_online():
     return jsonify({'online': True})
 
 
-# ── /check_interrupted ──────────────────
-@app.route('/check_interrupted', methods=['GET', 'OPTIONS'])
-def check_interrupted():
-    """腳本輪詢此端點，確認是否被 ID 輸入中斷"""
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-    return jsonify({'interrupted': session_id in interrupted})
-
-
 # ── /thinking ───────────────────────────
 @app.route('/thinking', methods=['POST', 'OPTIONS'])
 def thinking():
@@ -365,40 +446,6 @@ def chat():
 
     log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
     write_log(log_path, f"用戶：{message}")
-
-    # ── 偵測 ID 輸入（6 碼英數大寫）──
-    import re
-    if re.fullmatch(r'[A-Z0-9]{6}', message.strip().upper()):
-        input_id = message.strip().upper()
-        record   = lookup_return_id(input_id)
-
-        if record:
-            target_username = record['username']
-            target_log_path = record['log_path']
-            target_session  = record.get('session_id', session_id)
-
-            user_input_queues[session_id].clear()
-            interrupted.add(session_id)
-            write_log(target_log_path, f'[ID 驗證] 用戶以 ID {input_id} 重新進入')
-
-            def launch_and_clear(script, uname, sid, lpath):
-                time.sleep(0.3)
-                interrupted.discard(sid)  # 啟動後移除中斷標記
-                launch_script(script, uname, sid, lpath)
-
-            threading.Thread(
-                target=launch_and_clear,
-                args=('set_que.py', target_username, session_id, target_log_path),
-                daemon=True
-            ).start()
-            print(f"[chat] return_id 驗證成功 {input_id} → 啟動 set_que.py")
-
-        else:
-            message_queues[session_id].append('未找到記錄，請聯絡助教。')
-            interrupted.add(session_id)
-            print(f"[chat] return_id 未找到 {input_id}")
-
-        return jsonify({'reply': ''})
 
     # 一般訊息：若聊天框鎖定則忽略
     if session_id in input_locked:
