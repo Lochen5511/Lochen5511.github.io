@@ -31,6 +31,7 @@ user_input_queues = defaultdict(list)
 launched_sessions = set()
 last_seen         = {}
 input_locked      = set()
+interrupted_sessions = set()   # ← 新增：記錄被中斷的 session
 
 USER_TIMEOUT = 300
 
@@ -39,7 +40,6 @@ USER_TIMEOUT = 300
 # Session 庫（本地 JSON）
 # ──────────────────────────────────────────
 def load_db() -> dict:
-    """讀取 session 庫"""
     try:
         if os.path.exists(DB_PATH):
             with open(DB_PATH, 'r', encoding='utf-8') as f:
@@ -49,7 +49,6 @@ def load_db() -> dict:
     return {}
 
 def save_db(db: dict):
-    """寫入 session 庫"""
     try:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         with open(DB_PATH, 'w', encoding='utf-8') as f:
@@ -58,20 +57,18 @@ def save_db(db: dict):
         print(f"[db 寫入失敗] {e}")
 
 def register_session(username: str, session_id: str, log_path: str):
-    """登記新 session 到庫"""
     db = load_db()
     db[session_id] = {
         'username':  username,
         'log_path':  log_path,
         'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'unit':      None,
-        'return_id': None,  # 完成後發給用戶的隨機 ID
+        'return_id': None,
     }
     save_db(db)
     print(f"[db] 登記 session={session_id} user={username}")
 
 def update_session_unit(session_id: str, unit: str):
-    """更新 session 的單元記錄"""
     db = load_db()
     if session_id in db:
         db[session_id]['unit'] = unit
@@ -79,31 +76,23 @@ def update_session_unit(session_id: str, unit: str):
         print(f"[db] 更新 session={session_id} unit={unit}")
 
 def generate_return_id(session_id: str) -> str:
-    """產生隨機 6 碼英數 ID，寫入庫並建立反查索引"""
     import random, string
     db = load_db()
-
-    # 產生不重複的 6 碼 ID
-    existing = {v.get('return_id') for v in db.values() if v.get('return_id')}
+    existing = {v.get('return_id') for v in db.values() if isinstance(v, dict) and v.get('return_id')}
     while True:
         rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         if rid not in existing:
             break
-
     if session_id in db:
         db[session_id]['return_id'] = rid
-
-    # 建立反查索引：return_id -> session_id
     if '__return_index__' not in db:
         db['__return_index__'] = {}
     db['__return_index__'][rid] = session_id
-
     save_db(db)
     print(f"[db] 產生 return_id={rid} for session={session_id}")
     return rid
 
 def lookup_return_id(return_id: str) -> dict | None:
-    """用 return_id 查找對應的 session 記錄"""
     db = load_db()
     index = db.get('__return_index__', {})
     session_id = index.get(return_id)
@@ -112,7 +101,6 @@ def lookup_return_id(return_id: str) -> dict | None:
     return None
 
 def lookup_session(session_id: str) -> dict | None:
-    """查找 session，回傳 {'username', 'log_path'} 或 None"""
     db = load_db()
     return db.get(session_id)
 
@@ -131,7 +119,6 @@ def write_log(log_path: str, content: str):
         print(f"[log 寫入失敗] {e}")
 
 def launch_script(script: str, username: str, session_id: str, log_path: str):
-    """啟動指定 Python 腳本"""
     subprocess.Popen(
         ['python', script,
          '--username',   username,
@@ -163,7 +150,6 @@ def enter():
 
     open(log_path, 'a', encoding='utf-8').close()
 
-    # 登記到 session 庫
     register_session(username, session_id, log_path)
 
     print(f"[enter] username={username} session_id={session_id}")
@@ -173,7 +159,6 @@ def enter():
 # ── /enter_id ───────────────────────────
 @app.route('/enter_id', methods=['POST', 'OPTIONS'])
 def enter_id():
-    """用 return_id 進入，查找記錄後啟動 set_que.py"""
     if request.method == 'OPTIONS':
         return Response(status=200)
 
@@ -190,7 +175,6 @@ def enter_id():
     username = record['username']
     log_path = record['log_path']
 
-    # 產生新的 session_id 給這次對話
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
@@ -206,39 +190,6 @@ def enter_id():
 # ── /greeting_set_que ───────────────────
 @app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
 def greeting_set_que():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-
-    # 找到原始 log_path
-    db = load_db()
-    log_path = None
-    for v in db.values():
-        if isinstance(v, dict) and v.get('username') == username:
-            log_path = v.get('log_path', '')
-            break
-    if not log_path:
-        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-
-    if session_id and session_id not in launched_sessions:
-        launched_sessions.add(session_id)
-        threading.Thread(
-            target=launch_script,
-            args=('set_que.py', username, session_id, log_path),
-            daemon=True
-        ).start()
-        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
-
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
-    return jsonify({'reply': reply})
-
-
-# ── /greeting_set_que ───────────────────
-@app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
-def greeting_set_que():
     """以 ID 進入時，直接啟動 set_que.py"""
     if request.method == 'OPTIONS':
         return Response(status=200)
@@ -246,7 +197,13 @@ def greeting_set_que():
     data       = request.get_json() or {}
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
-    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+
+    # 用 session_id 直接查找 log_path（修正：不再用 username 模糊比對）
+    record   = lookup_session(session_id)
+    if record:
+        log_path = record.get('log_path', '')
+    else:
+        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
@@ -292,7 +249,6 @@ def greeting():
 # ── /generate_return_id ─────────────────
 @app.route('/generate_return_id', methods=['POST', 'OPTIONS'])
 def gen_return_id():
-    """validity.py 完成後呼叫，產生隨機 ID 回傳"""
     if request.method == 'OPTIONS':
         return Response(status=200)
 
@@ -305,7 +261,6 @@ def gen_return_id():
 # ── /lock_input ─────────────────────────
 @app.route('/lock_input', methods=['POST', 'OPTIONS'])
 def lock_input():
-    """button.py 呼叫，鎖定或解鎖聊天框"""
     if request.method == 'OPTIONS':
         return Response(status=200)
 
@@ -325,7 +280,6 @@ def lock_input():
 # ── /update_unit ────────────────────────
 @app.route('/update_unit', methods=['POST', 'OPTIONS'])
 def update_unit():
-    """button.py 呼叫，記錄用戶選擇的單元"""
     if request.method == 'OPTIONS':
         return Response(status=200)
 
@@ -395,6 +349,21 @@ def check_online():
     return jsonify({'online': True})
 
 
+# ── /check_interrupted ──────────────────  ← 新增
+@app.route('/check_interrupted', methods=['GET', 'OPTIONS'])
+def check_interrupted():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    session_id = request.args.get('session_id', '')
+
+    if session_id in interrupted_sessions:
+        interrupted_sessions.discard(session_id)   # 取出後清除，只觸發一次
+        return jsonify({'interrupted': True})
+
+    return jsonify({'interrupted': False})
+
+
 # ── /thinking ───────────────────────────
 @app.route('/thinking', methods=['POST', 'OPTIONS'])
 def thinking():
@@ -408,7 +377,7 @@ def thinking():
     return jsonify({'success': True})
 
 
-# ── /button_click（按鈕點擊，不受鎖定影響）──
+# ── /button_click ───────────────────────
 @app.route('/button_click', methods=['POST', 'OPTIONS'])
 def button_click():
     if request.method == 'OPTIONS':
@@ -447,7 +416,6 @@ def chat():
     log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
     write_log(log_path, f"用戶：{message}")
 
-    # 一般訊息：若聊天框鎖定則忽略
     if session_id in input_locked:
         print(f"[chat] session={session_id} 輸入框鎖定，忽略訊息: {message[:40]}")
         return jsonify({'reply': ''})
