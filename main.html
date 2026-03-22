@@ -301,6 +301,41 @@
       font-size: 11px; letter-spacing: 0.1em; color: var(--muted); opacity: 0.55;
     }
 
+    /* ── Checkbox 多選元件 ── */
+    .msg-checkbox { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+    .msg-checkbox .cb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2); cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      font-size: 14px; font-weight: 300; color: var(--cream);
+      user-select: none;
+    }
+    .msg-checkbox .cb-item:hover { border-color: var(--gold-dim); }
+    .msg-checkbox .cb-item.checked {
+      border-color: var(--gold); background: rgba(201,168,76,0.1);
+    }
+    .msg-checkbox .cb-item input[type=checkbox] { display: none; }
+    .msg-checkbox .cb-box {
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 1px solid var(--gold-dim); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--gold); transition: background 0.2s;
+    }
+    .msg-checkbox .cb-item.checked .cb-box { background: rgba(201,168,76,0.25); }
+    .msg-checkbox .cb-confirm {
+      margin-top: 4px; padding: 8px 20px; border-radius: 8px;
+      border: 1px solid var(--gold); background: transparent;
+      color: var(--gold); font-family: 'Noto Serif TC', serif;
+      font-size: 13px; letter-spacing: 0.1em; cursor: pointer;
+      align-self: flex-start;
+      transition: background 0.2s, color 0.2s;
+    }
+    .msg-checkbox .cb-confirm:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
+    .msg-checkbox .cb-confirm:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+    .msg-checkbox.locked .cb-item { pointer-events: none; opacity: 0.5; }
+
     /* ── Stats panel tab ── */
     .stats-tab {
       position: fixed;
@@ -642,10 +677,27 @@
     const isButton   = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
     const isButtons  = text.startsWith('__BUTTONS__');
     const isDropdown = text.startsWith('__DROPDOWN__');
+    const isCheckbox = text.startsWith('__CHECKBOX__');
     const isData     = text.startsWith('__DATA__');
     let content = '';
 
-    if (isData) {
+    if (isCheckbox) {
+      const raw   = text.replace('__CHECKBOX__', '');
+      const parts = raw.split('||');
+      const cbId  = parts[0] || 'cb';
+      const maxSel = parseInt(parts[1]) || 2;
+      const opts  = parts.slice(2);
+      const items = opts.map((o, i) => `
+        <label class="cb-item" id="cbitem_${cbId}_${i}" onclick="toggleCb('${cbId}',${i},${maxSel})">
+          <div class="cb-box" id="cbbox_${cbId}_${i}"></div>
+          <span>${escHtml(o)}</span>
+        </label>`).join('');
+      content = `<div class="msg-checkbox" id="cbwrap_${cbId}">
+        ${items}
+        <button class="cb-confirm" id="cbconfirm_${cbId}" disabled
+          onclick="confirmCb('${cbId}','${opts.join('||')}')">確認（已選 <span id="cbcount_${cbId}">0</span>/${maxSel}）</button>
+      </div>`;
+    } else if (isData) {
       // 解析孿生學生統計資料，不顯示訊息泡泡
       try {
         const payload = JSON.parse(text.replace('__DATA__', ''));
@@ -730,6 +782,58 @@
   }
   function removeTyping() {
     if (typingBubble) { typingBubble.remove(); typingBubble = null; }
+  }
+
+  /* ── Checkbox 多選 ── */
+  const _cbSelected = {};  // cbId -> Set of indices
+
+  function toggleCb(cbId, idx, maxSel) {
+    if (!_cbSelected[cbId]) _cbSelected[cbId] = new Set();
+    const sel = _cbSelected[cbId];
+    const item = document.getElementById(`cbitem_${cbId}_${idx}`);
+    const box  = document.getElementById(`cbbox_${cbId}_${idx}`);
+
+    if (sel.has(idx)) {
+      sel.delete(idx);
+      item.classList.remove('checked');
+      box.textContent = '';
+    } else {
+      if (sel.size >= maxSel) return; // 超過上限不允許勾選
+      sel.add(idx);
+      item.classList.add('checked');
+      box.textContent = '✓';
+    }
+
+    const count = sel.size;
+    document.getElementById(`cbcount_${cbId}`).textContent = count;
+    const btn = document.getElementById(`cbconfirm_${cbId}`);
+    btn.disabled = (count !== maxSel);
+  }
+
+  function confirmCb(cbId, optsRaw) {
+    const sel  = _cbSelected[cbId] || new Set();
+    const opts = optsRaw.split('||');
+    const chosen = [...sel].sort().map(i => opts[i]);
+
+    // 鎖定整個 checkbox 區塊
+    const wrap = document.getElementById(`cbwrap_${cbId}`);
+    wrap.classList.add('locked');
+    document.getElementById(`cbconfirm_${cbId}`).disabled = true;
+
+    const msg = chosen.join('，');
+    appendMsg(msg, 'user');
+    logMsg('user', msg);
+
+    // 第一個選擇
+    post('/button_click', {
+      message: `cb_first:${chosen[0]}`, username: userName, session_id: sessionId,
+    });
+    // 第二個選擇（稍後送出，讓後端兩次 wait_for_user 都能接收）
+    setTimeout(() => {
+      post('/button_click', {
+        message: `cb_second:${chosen[1]}`, username: userName, session_id: sessionId,
+      });
+    }, 200);
   }
 
   function confirmDropdown(ddId) {
