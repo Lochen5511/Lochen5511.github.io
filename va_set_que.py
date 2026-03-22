@@ -133,7 +133,7 @@ def make_question(n, total):
     write_log(f'\n── 第 {n}/{total} 題開始 ──')
 
     # ── 概念選擇 ──
-    send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
+    send('請先選1個想命題的概念，當做這題的標籤。', delay=0.3)
     send_dropdown(
         options     = [
             '內容效度',
@@ -164,7 +164,7 @@ def make_question(n, total):
         '你想用哪一種？或你直接開始寫也可以。'
         '一個完整的題幹，字數 ≥ 40 字，「2–4 句情境 + 1 句問句」'
         '（請直接於聊天框輸入完整的題目。）'
-    ), delay=1)
+    ), delay=0.3)
 
     stem = wait_for_user()
     if is_exit(stem): return False
@@ -174,7 +174,7 @@ def make_question(n, total):
     send((
         '對了，你希望作答的人從題幹中核心判斷的線索是什麼？\n'
         '例如：「同一時間點」「一年後」「雙向細目表」「因素分析」「α很高」'
-    ), delay=1)
+    ), delay=0.3)
 
     clue = wait_for_user()
     if is_exit(clue): return False
@@ -183,27 +183,44 @@ def make_question(n, total):
     write_log(f'[命題{n}] 概念={concept} | 題幹={stem} | 線索={clue}')
 
     # ── 關卡二：選項 ──
-    send((
-        '好，我們進到關卡二。\n'
-        '這一關只做一件事：把你的四個選項寫出來，並且讓至少兩個錯選項「有意義」，'
-        '也就是能代表常見的錯誤想法。\n\n'
-        '小提示：如果你不知道錯選項怎麼寫，你可以考慮把正確概念改一個關鍵詞，'
-        '就會變成典型迷思。例如：把「當下」換成「一年後」。\n\n'
-        f'再看一次你的題幹：\n{stem}'
-    ), delay=1)
+    while True:
+        send((
+            '好，我們進到關卡二。\n'
+            '這一關只做一件事：把你的四個選項寫出來，並且讓至少兩個錯選項「有意義」，'
+            '也就是能代表常見的錯誤想法。\n\n'
+            '小提示：如果你不知道錯選項怎麼寫，你可以考慮把正確概念改一個關鍵詞，'
+            '就會變成典型迷思。例如：把「當下」換成「一年後」。\n\n'
+            f'再看一次你的題幹：\n{stem}'
+        ), delay=0.3)
+        send_buttons(
+            labels     = ['正確無誤', '需要修改'],
+            colors     = ['green', 'gray'],
+            size       = 'small',
+            button_ids = ['btn_stem_ok', 'btn_stem_edit']
+        )
+        stem_check = wait_for_user()
+        if is_exit(stem_check): return False
+        if 'btn_stem_ok' in stem_check:
+            break
+        # 需要修改：重新收集題幹
+        send('請重新輸入題幹：', delay=0.5)
+        new_stem = wait_for_user()
+        if is_exit(new_stem): return False
+        stem = new_stem
+        write_log(f'[命題{n}] 題幹修改={stem}')
 
     options = wait_for_user()
     if is_exit(options): return False
     write_log(f'[命題{n}] 選項草稿={options}')
 
-    send('請告訴我，你心中的正確答案：', delay=1)
+    send('請告訴我，你心中的正確答案：', delay=0.3)
 
     answer = wait_for_user()
     if is_exit(answer): return False
     print(f"[set_que] 題{n} 正確答案={answer[:60]}")
 
     # ── 三個錯誤選項（逐一確認）──
-    send('接著，請依序輸入三個錯誤的選項。', delay=1)
+    send('接著，請依序輸入三個錯誤的選項。', delay=0.3)
 
     wrong_options = []
     for i in range(1, 4):
@@ -238,7 +255,7 @@ def make_question(n, total):
             f'D. {wrong_options[2]}\n\n'
             f'（A 為正確答案）'
         )
-        send(full_question, delay=1)
+        send(full_question, delay=0.3)
         send_buttons(
             labels     = ['正確無誤', '我想修改'],
             colors     = ['green', 'gray'],
@@ -282,7 +299,7 @@ def make_question(n, total):
     send((
         '接下來我想請你挑出兩個「最容易讓人選錯」的選項。\n'
         '你不用挑全部，只要挑兩個就好。'
-    ), delay=1)
+    ), delay=0.3)
 
     send_buttons(
         labels     = [
@@ -318,7 +335,7 @@ def make_question(n, total):
     send(
         f'好，那我們先看「{first_option}」。\n'
         '如果有人選了它，你猜他最可能是怎麼想的？',
-        delay=1
+        delay=0.3
     )
     guess_first = wait_for_user()
     if is_exit(guess_first): return False
@@ -327,7 +344,7 @@ def make_question(n, total):
     send(
         f'再來看「{second_option}」。\n'
         '你覺得選它的人最可能是哪種想法搞錯？',
-        delay=1
+        delay=0.3
     )
     guess_second = wait_for_user()
     if is_exit(guess_second): return False
@@ -340,7 +357,7 @@ def make_question(n, total):
             f'【{first_label}】\n推測想法：{guess_first}\n\n'
             f'【{second_label}】\n推測想法：{guess_second}'
         )
-        send(summary, delay=1)
+        send(summary, delay=0.3)
         send_buttons(
             labels     = ['正確無誤', '我想修改'],
             colors     = ['green', 'gray'],
@@ -354,12 +371,12 @@ def make_question(n, total):
             write_log(f'[命題{n}] 易錯分析確認完成')
             break
 
-        send(f'請重新輸入「{first_label}」的易錯推測：', delay=0.5)
+        send(f'請重新輸入「{first_label}」的易錯推測：', delay=0.3)
         v = wait_for_user()
         if is_exit(v): return False
         guess_first = v
 
-        send(f'請重新輸入「{second_label}」的易錯推測：', delay=0.5)
+        send(f'請重新輸入「{second_label}」的易錯推測：', delay=0.3)
         v = wait_for_user()
         if is_exit(v): return False
         guess_second = v
@@ -378,7 +395,7 @@ def main():
         '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
         '我會用三個小關卡帶你走。\n'
         '你不用一次就寫得很完美，只要一關一關完成就好。'
-    ), delay=1)
+    ), delay=0.5)
 
     send_buttons(
         labels     = ['開始命題'],
@@ -399,7 +416,7 @@ def main():
                 f'接著，請再出 {remaining} 題'
                 f'（我們總共要出 {TOTAL_QUE} 題），'
                 f'讓我們繼續出第 {n} 題。'
-            ), delay=1)
+            ), delay=0.5)
 
         ok = make_question(n, TOTAL_QUE)
         if not ok:
@@ -408,7 +425,7 @@ def main():
 
     send(
         '很好，現在你已經完成命題，讓我召喚「孿生AI學生」來試做你的題目吧！',
-        delay=1
+        delay=0.5
     )
 
     import subprocess

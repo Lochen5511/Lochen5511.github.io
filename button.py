@@ -203,11 +203,11 @@ def _lock(locked: bool):
 def main():
     # ↓↓↓ 在這裡加入你的代碼 ↓↓↓
 
-    send(f'你好，{username}！我是艾評。', delay=3)
-    send('歡迎來到本系統。', delay=1)
-    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=1)
-    send('待會，你會完成8題選擇題，每次作答後，評價自己對這個答案的信心。', delay=2)
-    send('在你準備好後，就按下開始吧！', delay=1)
+    send(f'你好，{username}！我是艾評。', delay=1)
+    send('歡迎來到本系統。', delay=0.5)
+    send('在我們進入正題前，先來幫你做一下概念體檢。', delay=0.5)
+    send('待會，你會完成8題選擇題，每次作答後，評價自己對這個答案的信心。', delay=0.5)
+    send('在你準備好後，就按下任意按鈕開始吧！', delay=0.2)
 
     send_buttons(
         labels     = ['效度', '信度'],

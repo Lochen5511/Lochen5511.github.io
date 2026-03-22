@@ -261,9 +261,7 @@ QUESTIONS = [
 # 出題流程
 # ──────────────────────────────────────────
 def ask_question(q, index, total):
-    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=1)
-
-    time.sleep(0.3)
+    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=0.3)
     send_buttons(
         labels     = [f'{k}. {v}' for k, v in q['options'].items()],
         colors     = ['gold', 'gold', 'gold', 'gold'],
@@ -278,9 +276,7 @@ def ask_question(q, index, total):
     chosen_key = ans_reply.split(':')[0].replace('ans_', '').strip()
     print(f"[作答] item={q['item_id']} answer={chosen_key}")
 
-    time.sleep(0.3)
-    send('請評估你對這個答案的把握度：', delay=0)
-    time.sleep(0.3)
+    send('請評估你對這個答案的把握度：', delay=0.3)
     send_buttons(
         labels     = ['1 分', '2 分', '3 分', '4 分', '5 分'],
         colors     = ['gray', 'gray', 'gold', 'gold', 'gold'],
@@ -322,8 +318,8 @@ def main():
     total   = len(QUESTIONS)
     results = []
 
-    send('好的，現在開始效度概念的快篩題組，共 8 題。', delay=1)
-    send('每題作答後，請同時評估你的把握度（1–5 分）。', delay=1)
+    send('好的，現在開始效度概念的快篩題組，共 8 題。', delay=0.3)
+    send('每題作答後，請同時評估你的把握度（1–5 分）。', delay=0.3)
 
     for i, q in enumerate(QUESTIONS, start=1):
         result = ask_question(q, i, total)
@@ -349,7 +345,7 @@ def main():
         f'題組完成！共答對 {correct_count}/{total} 題，'
         f'平均把握度 {avg_conf:.1f} 分。'
     )
-    send(summary, delay=1)
+    send(summary, delay=0.3)
 
     # 產生並發送隨機 ID
     try:
@@ -364,7 +360,7 @@ def main():
         send(
             f'你的學習 ID 是：{return_id}\n'
             '請記下這組 ID，下次回來時在聊天框輸入即可繼續下一階段。',
-            delay=1
+            delay=0.3
         )
         write_log(f'[ID] return_id={return_id}')
 

@@ -254,7 +254,7 @@ def main():
         send(f'（題目解析失敗，僅讀到 {len(questions)} 題，請聯絡助教。）')
         return
 
-    send('孿生 AI 學生正在作答中，請稍候…', delay=1)
+    send('孿生 AI 學生正在作答中，請稍候…', delay=0.3)
     _thinking(True)
 
     all_answers = []
@@ -308,7 +308,7 @@ def main():
 
     send(
         f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案，已儲存至 AnswerMatrix。',
-        delay=1
+        delay=0.3
     )
     write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')
     print("[que_ana.py] 執行完畢")

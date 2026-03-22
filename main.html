@@ -368,7 +368,7 @@
       background: rgba(201,168,76,0.15); border-radius: 2px;
     }
 
-    /* ── 每題圓餅圖區塊 ── */
+    /* ── 每題長條圖區塊 ── */
     .chart-block {
       display: flex; flex-direction: column; gap: 10px;
     }
@@ -378,20 +378,7 @@
       text-align: center;
     }
     .chart-wrap {
-      position: relative; width: 180px; height: 180px;
-      margin: 0 auto;
-    }
-    .chart-legend {
-      display: flex; flex-wrap: wrap; gap: 6px 12px;
-      justify-content: center;
-    }
-    .legend-item {
-      display: flex; align-items: center; gap: 5px;
-      font-family: 'Noto Serif TC', serif;
-      font-size: 12px; color: var(--muted);
-    }
-    .legend-dot {
-      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+      position: relative; width: 100%; height: 160px;
     }
 
     /* ── 作答人數 ── */
@@ -562,17 +549,17 @@
   function renderCharts(stats, nStudents) {
     const body = document.getElementById('statsPanelBody');
     body.innerHTML = '';
-    chartInstances && Object.values(chartInstances).forEach(c => c.destroy());
+    Object.values(chartInstances).forEach(c => c.destroy());
 
     const keys = Object.keys(stats).sort((a,b) =>
       parseInt(a.replace('Q','')) - parseInt(b.replace('Q',''))
     );
 
     keys.forEach((key, idx) => {
-      const counts  = stats[key];
-      const labels  = Object.keys(counts);
-      const values  = Object.values(counts);
-      const qNum    = idx + 1;
+      const counts = stats[key];
+      const labels = Object.keys(counts);
+      const values = Object.values(counts);
+      const qNum   = idx + 1;
 
       const block = document.createElement('div');
       block.className = 'chart-block';
@@ -584,53 +571,53 @@
       block.appendChild(lbl);
 
       // Canvas
-      const wrap  = document.createElement('div');
+      const wrap = document.createElement('div');
       wrap.className = 'chart-wrap';
       const canvas = document.createElement('canvas');
-      canvas.id = `pie_${key}`;
+      canvas.id = `bar_${key}`;
       wrap.appendChild(canvas);
       block.appendChild(wrap);
 
-      // 圖例
-      const legend = document.createElement('div');
-      legend.className = 'chart-legend';
-      labels.forEach(opt => {
-        const item = document.createElement('div');
-        item.className = 'legend-item';
-        const dot = document.createElement('div');
-        dot.className   = 'legend-dot';
-        dot.style.background = PIE_COLORS[opt] || '#888';
-        const txt = document.createElement('span');
-        txt.textContent = `${opt}：${counts[opt]}`;
-        item.appendChild(dot);
-        item.appendChild(txt);
-        legend.appendChild(item);
-      });
-      block.appendChild(legend);
-
       body.appendChild(block);
 
-      // Chart.js
+      // Chart.js 長條圖
       chartInstances[key] = new Chart(canvas, {
-        type: 'doughnut',
+        type: 'bar',
         data: {
           labels: labels,
           datasets: [{
             data:            values,
             backgroundColor: labels.map(l => PIE_COLORS[l] || '#888'),
-            borderColor:     'rgba(19,17,14,0.6)',
-            borderWidth:     2,
+            borderColor:     labels.map(l => PIE_COLORS[l] || '#888'),
+            borderWidth:     1,
+            borderRadius:    4,
           }]
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: ctx => ` ${ctx.label}：${ctx.raw} 人`
+                label: ctx => ` ${ctx.raw} 人`
               }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: 'rgba(240,235,224,0.6)', font: { size: 13 } },
+              grid:  { color: 'rgba(201,168,76,0.08)' },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color:     'rgba(240,235,224,0.6)',
+                font:      { size: 11 },
+                stepSize:  1,
+                precision: 0,
+              },
+              grid: { color: 'rgba(201,168,76,0.08)' },
             }
           }
         }
