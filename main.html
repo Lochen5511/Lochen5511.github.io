@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI 共學</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -20,6 +21,7 @@
       --user-bg:  #2a2318;
       --ai-bg:    #1c1814;
       --radius:   14px;
+      --panel-w:  340px;
     }
 
     html, body {
@@ -36,6 +38,7 @@
       height: 100vh;
       max-width: 1000px;
       margin: 0 auto;
+      position: relative;
     }
 
     /* ── Header ── */
@@ -151,6 +154,8 @@
       font-size: 11px; color: var(--muted);
       margin-top: 4px; opacity: 0.65; letter-spacing: 0.08em;
     }
+    .msg.user .msg-time { text-align: right; }
+
     /* ── Dropdown ── */
     .msg-dropdown {
       margin-top: 6px;
@@ -181,8 +186,6 @@
     }
     .msg-dropdown .dd-confirm:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
     .msg-dropdown .dd-confirm:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
-
-    .msg.user .msg-time { text-align: right; }
 
     /* ── Typing indicator ── */
     .typing-indicator {
@@ -298,6 +301,108 @@
       font-size: 11px; letter-spacing: 0.1em; color: var(--muted); opacity: 0.55;
     }
 
+    /* ── Stats panel tab ── */
+    .stats-tab {
+      position: fixed;
+      right: 0; top: 50%;
+      transform: translateY(-50%);
+      z-index: 200;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      padding: 18px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 10px 0 0 10px;
+      cursor: pointer;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 13px; letter-spacing: 0.2em;
+      color: var(--gold);
+      transition: background 0.2s, color 0.2s;
+      user-select: none;
+      display: none; /* 隱藏直到有資料 */
+    }
+    .stats-tab:hover { background: var(--surface2); color: var(--cream); }
+    .stats-tab.visible { display: block; }
+
+    /* ── Stats panel ── */
+    .stats-panel {
+      position: fixed;
+      right: -380px; top: 0; bottom: 0;
+      width: var(--panel-w);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      z-index: 190;
+      display: flex; flex-direction: column;
+      transition: right 0.35s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+    }
+    .stats-panel.open { right: 0; }
+
+    .stats-panel-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .stats-panel-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px; letter-spacing: 0.2em; color: var(--gold);
+    }
+    .stats-panel-close {
+      background: transparent; border: none;
+      color: var(--muted); font-size: 18px; cursor: pointer;
+      line-height: 1; padding: 2px 6px;
+      transition: color 0.2s;
+    }
+    .stats-panel-close:hover { color: var(--cream); }
+
+    .stats-panel-body {
+      flex: 1; overflow-y: auto; padding: 20px 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(201,168,76,0.15) transparent;
+      display: flex; flex-direction: column; gap: 28px;
+    }
+    .stats-panel-body::-webkit-scrollbar { width: 3px; }
+    .stats-panel-body::-webkit-scrollbar-thumb {
+      background: rgba(201,168,76,0.15); border-radius: 2px;
+    }
+
+    /* ── 每題圓餅圖區塊 ── */
+    .chart-block {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .chart-label {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 13px; letter-spacing: 0.2em; color: var(--gold-dim);
+      text-align: center;
+    }
+    .chart-wrap {
+      position: relative; width: 180px; height: 180px;
+      margin: 0 auto;
+    }
+    .chart-legend {
+      display: flex; flex-wrap: wrap; gap: 6px 12px;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 12px; color: var(--muted);
+    }
+    .legend-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* ── 作答人數 ── */
+    .stats-footer {
+      margin-top: 4px; padding: 14px 0 4px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 13px; letter-spacing: 0.15em; color: var(--muted);
+    }
+
     /* ── Animations ── */
     @keyframes msgIn  { to { opacity: 1; transform: translateY(0); } }
     @keyframes bounce {
@@ -312,6 +417,7 @@
       .avatar { width: 34px; height: 34px; }
       .avatar-name { font-size: 9px; max-width: 38px; }
       .bubble { font-size: 14px; padding: 10px 13px; }
+      :root { --panel-w: 280px; }
     }
   </style>
 </head>
@@ -365,38 +471,43 @@
 
 </div>
 
+<!-- Stats tab & panel（在 .app 外，fixed 定位）-->
+<button class="stats-tab" id="statsTab" onclick="togglePanel()">孿生學生作答分析</button>
+
+<div class="stats-panel" id="statsPanel">
+  <div class="stats-panel-header">
+    <span class="stats-panel-title">孿生學生作答分析</span>
+    <button class="stats-panel-close" onclick="togglePanel()">✕</button>
+  </div>
+  <div class="stats-panel-body" id="statsPanelBody">
+    <!-- 圓餅圖動態插入 -->
+  </div>
+</div>
+
 <script>
   /* ── 設定 ── */
-  let BACKEND = 'https://your-tunnel.trycloudflare.com'; // 預設值
+  let BACKEND = 'https://your-tunnel.trycloudflare.com';
 
   async function loadConfig() {
     try {
       const res  = await fetch('./config.json?t=' + Date.now());
       const data = await res.json();
-      if (data.backend) {
-        BACKEND = data.backend;
-        console.log('[config] 後端網址:', BACKEND);
-      }
-    } catch (e) {
-      console.warn('[config] 讀取失敗，使用預設網址:', BACKEND);
-    }
+      if (data.backend) { BACKEND = data.backend; }
+    } catch (e) {}
   }
 
-  /* ── 從 URL 取得 session 資訊 ── */
+  /* ── URL 參數 ── */
   const params    = new URLSearchParams(window.location.search);
   const userName  = params.get('username')   || '使用者';
   const sessionId = params.get('session_id') || '';
 
-  console.log('[main] userName:', userName, 'sessionId:', sessionId);
-
-  /* ── 顯示用戶名 ── */
   document.getElementById('userBadge').innerHTML = `<strong>${userName}</strong>`;
 
   /* ── DOM refs ── */
-  const msgList  = document.getElementById('messages');
-  const emptyEl  = document.getElementById('emptyState');
-  const input    = document.getElementById('msgInput');
-  const sendBtn  = document.getElementById('sendBtn');
+  const msgList   = document.getElementById('messages');
+  const emptyEl   = document.getElementById('emptyState');
+  const input     = document.getElementById('msgInput');
+  const sendBtn   = document.getElementById('sendBtn');
   const charCount = document.getElementById('charCount');
 
   /* ── Input handlers ── */
@@ -407,31 +518,20 @@
     charCount.textContent = `${len} / 2000`;
     sendBtn.classList.toggle('active', len > 0);
   });
-
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
   /* ── Helpers ── */
   function getTime() {
     return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
   }
-
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/\n/g,'<br>');
   }
-
-  function scrollBottom() {
-    msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' });
-  }
-
-  function removeEmpty() {
-    if (emptyEl.parentNode) emptyEl.remove();
-  }
+  function scrollBottom() { msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' }); }
+  function removeEmpty()  { if (emptyEl.parentNode) emptyEl.remove(); }
 
   /* ── Modal ── */
   function showModal(msg) {
@@ -442,6 +542,111 @@
     document.getElementById('modalOverlay').classList.remove('show');
   }
 
+  /* ── Stats panel ── */
+  let panelOpen = false;
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById('statsPanel').classList.toggle('open', panelOpen);
+  }
+
+  /* ── 圓餅圖顏色 ── */
+  const PIE_COLORS = {
+    A: 'rgba(201,168,76,0.85)',
+    B: 'rgba(106,170,191,0.85)',
+    C: 'rgba(106,191,105,0.85)',
+    D: 'rgba(191,106,106,0.85)',
+  };
+
+  const chartInstances = {};
+
+  function renderCharts(stats, nStudents) {
+    const body = document.getElementById('statsPanelBody');
+    body.innerHTML = '';
+    chartInstances && Object.values(chartInstances).forEach(c => c.destroy());
+
+    const keys = Object.keys(stats).sort((a,b) =>
+      parseInt(a.replace('Q','')) - parseInt(b.replace('Q',''))
+    );
+
+    keys.forEach((key, idx) => {
+      const counts  = stats[key];
+      const labels  = Object.keys(counts);
+      const values  = Object.values(counts);
+      const qNum    = idx + 1;
+
+      const block = document.createElement('div');
+      block.className = 'chart-block';
+
+      // 標題
+      const lbl = document.createElement('div');
+      lbl.className   = 'chart-label';
+      lbl.textContent = `第 ${qNum} 題`;
+      block.appendChild(lbl);
+
+      // Canvas
+      const wrap  = document.createElement('div');
+      wrap.className = 'chart-wrap';
+      const canvas = document.createElement('canvas');
+      canvas.id = `pie_${key}`;
+      wrap.appendChild(canvas);
+      block.appendChild(wrap);
+
+      // 圖例
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+      labels.forEach(opt => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const dot = document.createElement('div');
+        dot.className   = 'legend-dot';
+        dot.style.background = PIE_COLORS[opt] || '#888';
+        const txt = document.createElement('span');
+        txt.textContent = `${opt}：${counts[opt]}`;
+        item.appendChild(dot);
+        item.appendChild(txt);
+        legend.appendChild(item);
+      });
+      block.appendChild(legend);
+
+      body.appendChild(block);
+
+      // Chart.js
+      chartInstances[key] = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data:            values,
+            backgroundColor: labels.map(l => PIE_COLORS[l] || '#888'),
+            borderColor:     'rgba(19,17,14,0.6)',
+            borderWidth:     2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.label}：${ctx.raw} 人`
+              }
+            }
+          }
+        }
+      });
+    });
+
+    // 作答人數（最底）
+    const footer = document.createElement('div');
+    footer.className   = 'stats-footer';
+    footer.textContent = `共 ${nStudents} 位孿生學生作答`;
+    body.appendChild(footer);
+
+    // 顯示 tab
+    document.getElementById('statsTab').classList.add('visible');
+  }
+
   /* ── Append message ── */
   function appendMsg(text, role) {
     removeEmpty();
@@ -450,9 +655,19 @@
     const isButton   = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
     const isButtons  = text.startsWith('__BUTTONS__');
     const isDropdown = text.startsWith('__DROPDOWN__');
+    const isData     = text.startsWith('__DATA__');
     let content = '';
 
-    if (isDropdown) {
+    if (isData) {
+      // 解析孿生學生統計資料，不顯示訊息泡泡
+      try {
+        const payload = JSON.parse(text.replace('__DATA__', ''));
+        if (payload.type === 'answer_matrix') {
+          renderCharts(payload.stats, payload.n_students);
+        }
+      } catch(e) { console.warn('[data parse]', e); }
+      return; // 不插入訊息列
+    } else if (isDropdown) {
       const raw   = text.replace('__DROPDOWN__', '');
       const parts = raw.split('||');
       const ddId  = parts[0] || 'dropdown';
@@ -480,14 +695,12 @@
         </button>`;
       }).join('');
       content = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
-
     } else if (isButton) {
       const [lbl, col, sz, bid] = text.replace('__BUTTON__','').split('||');
       content = `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
         onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}')">
         ${escHtml(lbl||'')}
       </button>`;
-
     } else {
       content = `<div class="bubble">${escHtml(text)}</div>`;
     }
@@ -510,7 +723,6 @@
 
   /* ── Typing bubble ── */
   let typingBubble = null;
-
   function appendTyping() {
     removeEmpty();
     const div = document.createElement('div');
@@ -529,7 +741,6 @@
     scrollBottom();
     return div;
   }
-
   function removeTyping() {
     if (typingBubble) { typingBubble.remove(); typingBubble = null; }
   }
@@ -538,23 +749,14 @@
     const sel = document.getElementById(`sel_${ddId}`);
     const val = sel ? sel.value : '';
     if (!val) return;
-
-    // 鎖定
     sel.disabled = true;
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
-
     appendMsg(val, 'user');
     logMsg('user', val);
-
-    post('/button_click', {
-      message:    val,
-      username:   userName,
-      session_id: sessionId,
-    });
+    post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
 
-  /* ── Button click ── */
   function clickBtn(btn, label, buttonId, groupId) {
     if (groupId) {
       document.querySelectorAll(`[data-group="${groupId}"]`)
@@ -563,42 +765,27 @@
       btn.classList.add('used');
     }
     btn.textContent = '✓ ' + label;
-
     appendMsg(label, 'user');
     removeTyping();
     typingBubble = appendTyping();
     logMsg('user', `[按鈕:${buttonId}] ${label}`);
-
-    post('/button_click', {
-      message:    `${buttonId}:${label}`,
-      username:   userName,
-      session_id: sessionId,
-    });
+    post('/button_click', { message: `${buttonId}:${label}`, username: userName, session_id: sessionId });
   }
 
-  /* ── Post helper ── */
   async function post(path, body) {
     try {
       await fetch(`${BACKEND}${path}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-    } catch (e) {
-      console.warn(`[post ${path}]`, e.message);
-    }
+    } catch(e) { console.warn(`[post ${path}]`, e.message); }
   }
 
-  /* ── Log ── */
   function logMsg(role, message) {
     post('/log', { username: userName, session_id: sessionId, role, message });
   }
 
-  /* ── 沒有 session_id 就跳回 enter ── */
-  if (!sessionId) {
-    console.warn('[main] 沒有 session_id，跳回 enter.html');
-    window.location.href = 'enter.html';
-  }
+  if (!sessionId) { window.location.href = 'enter.html'; }
 
   /* ── Poll（每秒）── */
   setInterval(async () => {
@@ -613,7 +800,7 @@
           showModal(data.message.replace('__ALERT__', ''));
         } else {
           appendMsg(data.message, 'ai');
-          logMsg('ai', data.message);
+          if (!data.message.startsWith('__')) logMsg('ai', data.message);
         }
       } else if (data.thinking && !typingBubble) {
         typingBubble = appendTyping();
@@ -621,24 +808,19 @@
         removeTyping();
       }
 
-      // 根據鎖定狀態控制輸入框
       const locked = data.input_locked === true;
       input.disabled    = locked;
       sendBtn.disabled  = locked;
       input.placeholder = locked ? '請點擊上方按鈕作答…' : '輸入訊息…';
-    } catch (e) {
-      console.warn('[poll]', e.message);
-    }
+    } catch(e) { console.warn('[poll]', e.message); }
   }, 1000);
 
-  /* ── Greeting（頁面載入後呼叫一次）── */
+  /* ── Greeting ── */
   window.addEventListener('load', async () => {
     await loadConfig();
     typingBubble = appendTyping();
-
-    const mode    = params.get('mode') || '';
-    const route   = mode === 'set_que' ? '/greeting_set_que' : '/greeting';
-
+    const mode  = params.get('mode') || '';
+    const route = mode === 'set_que' ? '/greeting_set_que' : '/greeting';
     try {
       const res  = await post_r(route, { username: userName, session_id: sessionId });
       const data = await res.json();
@@ -646,7 +828,7 @@
       const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(reply, 'ai');
       logMsg('ai', reply);
-    } catch (e) {
+    } catch(e) {
       removeTyping();
       appendMsg('> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)', 'ai');
     }
@@ -654,8 +836,7 @@
 
   async function post_r(path, body) {
     return fetch(`${BACKEND}${path}`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   }
@@ -664,19 +845,13 @@
   async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
-
     appendMsg(text, 'user');
     logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
     charCount.textContent = '0 / 2000';
     sendBtn.classList.remove('active');
-
-    await post('/chat', {
-      message:    text,
-      username:   userName,
-      session_id: sessionId,
-    });
+    await post('/chat', { message: text, username: userName, session_id: sessionId });
   }
 </script>
 

@@ -209,7 +209,7 @@ def greeting_set_que():
         launched_sessions.add(session_id)
         threading.Thread(
             target=launch_script,
-            args=('set_que.py', username, session_id, log_path),
+            args=('va_set_que.py', username, session_id, log_path),
             daemon=True
         ).start()
         print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
