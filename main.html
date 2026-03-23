@@ -262,7 +262,7 @@
       background: var(--surface); flex-shrink: 0;
     }
     .input-row {
-      display: flex; align-items: flex-end; gap: 10px;
+      display: flex; align-items: center; gap: 10px;
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 12px; padding: 9px 9px 9px 16px;
       transition: border-color 0.3s;
@@ -461,7 +461,7 @@
     <div class="hd">
       <div class="line"></div><div class="diamond"></div>
     </div>
-    <h1><span>AI</span> 共學</h1>
+    <h1>孿生 <span>AI</span></h1>
     <div class="hd r">
       <div class="diamond"></div><div class="line"></div>
     </div>
@@ -748,7 +748,7 @@
     div.className = `msg ${role}`;
     div.innerHTML = `
       <div class="avatar-col">
-        <div class="avatar">${role === 'ai' ? 'AI' : ''}</div>
+        <div class="avatar">${role === 'ai' ? '<img src="head.jpg" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">' : '<img src="user-head.png" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'}</div>
         <span class="avatar-name">${label}</span>
       </div>
       <div class="msg-body">
@@ -768,7 +768,7 @@
     div.className = 'msg ai';
     div.innerHTML = `
       <div class="avatar-col">
-        <div class="avatar">AI</div>
+        <div class="avatar"><img src="head.jpg" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
         <span class="avatar-name">艾評</span>
       </div>
       <div class="msg-body">
@@ -822,6 +822,7 @@
 
     const msg = chosen.join('，');
     appendMsg(msg, 'user');
+    logMsg('user', msg);
 
     // 第一個選擇
     post('/button_click', {
@@ -832,7 +833,7 @@
       post('/button_click', {
         message: `cb_second:${chosen[1]}`, username: userName, session_id: sessionId,
       });
-    }, 200);
+    }, 300);
   }
 
   function confirmDropdown(ddId) {
@@ -843,6 +844,7 @@
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
     appendMsg(val, 'user');
+    logMsg('user', val);
     post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
 
@@ -857,6 +859,7 @@
     appendMsg(label, 'user');
     removeTyping();
     typingBubble = appendTyping();
+    logMsg('user', `[按鈕:${buttonId}] ${label}`);
     post('/button_click', { message: `${buttonId}:${label}`, username: userName, session_id: sessionId });
   }
 
@@ -875,7 +878,7 @@
 
   if (!sessionId) { window.location.href = 'enter.html'; }
 
-  /* ── Poll（每 300ms）── */
+  /* ── Poll（每秒）── */
   setInterval(async () => {
     if (!sessionId) return;
     try {
@@ -888,6 +891,7 @@
           showModal(data.message.replace('__ALERT__', ''));
         } else {
           appendMsg(data.message, 'ai');
+          if (!data.message.startsWith('__')) logMsg('ai', data.message);
         }
       } else if (data.thinking && !typingBubble) {
         typingBubble = appendTyping();
@@ -914,6 +918,7 @@
       removeTyping();
       const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(reply, 'ai');
+      logMsg('ai', reply);
     } catch(e) {
       removeTyping();
       appendMsg('> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)', 'ai');
@@ -932,6 +937,7 @@
     const text = input.value.trim();
     if (!text) return;
     appendMsg(text, 'user');
+    logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
     charCount.textContent = '0 / 2000';
