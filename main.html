@@ -822,7 +822,6 @@
 
     const msg = chosen.join('，');
     appendMsg(msg, 'user');
-    logMsg('user', msg);
 
     // 第一個選擇
     post('/button_click', {
@@ -844,7 +843,6 @@
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
     appendMsg(val, 'user');
-    logMsg('user', val);
     post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
 
@@ -859,7 +857,6 @@
     appendMsg(label, 'user');
     removeTyping();
     typingBubble = appendTyping();
-    logMsg('user', `[按鈕:${buttonId}] ${label}`);
     post('/button_click', { message: `${buttonId}:${label}`, username: userName, session_id: sessionId });
   }
 
@@ -891,7 +888,6 @@
           showModal(data.message.replace('__ALERT__', ''));
         } else {
           appendMsg(data.message, 'ai');
-          if (!data.message.startsWith('__')) logMsg('ai', data.message);
         }
       } else if (data.thinking && !typingBubble) {
         typingBubble = appendTyping();
@@ -918,7 +914,6 @@
       removeTyping();
       const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(reply, 'ai');
-      logMsg('ai', reply);
     } catch(e) {
       removeTyping();
       appendMsg('> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)', 'ai');
