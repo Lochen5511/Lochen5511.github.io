@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI 共學</title>
+  <title>孿生 AI</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
@@ -768,8 +768,10 @@
     div.className = 'msg ai';
     div.innerHTML = `
       <div class="avatar-col">
-        <div class="avatar">AI</div>
-        <span class="avatar-name">AI</span>
+        <div class="avatar">
+          <img src="head.jpg" alt="AI">
+        </div>
+        <span class="avatar-name">艾評</span>
       </div>
       <div class="msg-body">
         <div class="bubble typing-indicator">
@@ -878,7 +880,7 @@
 
   if (!sessionId) { window.location.href = 'enter.html'; }
 
-  /* ── Poll（每秒）── */
+  /* ── Poll（每 300ms）── */
   setInterval(async () => {
     if (!sessionId) return;
     try {
@@ -904,7 +906,7 @@
       sendBtn.disabled  = locked;
       input.placeholder = locked ? '請點擊上方按鈕作答…' : '輸入訊息…';
     } catch(e) { console.warn('[poll]', e.message); }
-  }, 1000);
+  }, 300);
 
   /* ── Greeting ── */
   window.addEventListener('load', async () => {
@@ -937,7 +939,6 @@
     const text = input.value.trim();
     if (!text) return;
     appendMsg(text, 'user');
-    logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
     charCount.textContent = '0 / 2000';

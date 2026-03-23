@@ -25,7 +25,7 @@
 
     .bg {
       position: fixed; inset: 0;
-      background-image: url('./20251205_124326.jpg');
+      background-image: url('./bc.jpg');
       background-size: cover;
       background-position: center;
       filter: brightness(0.45) saturate(0.8);
@@ -186,20 +186,7 @@
       background: var(--gold); opacity: 0.45;
     }
 
-    .divider {
-      display: flex; align-items: center; gap: 12px;
-      margin: 20px 0;
-    }
-    .divider::before, .divider::after {
-      content: ''; flex: 1; height: 1px;
-      background: rgba(201,168,76,0.2);
-    }
-    .divider span {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 12px; letter-spacing: 0.2em;
-      color: rgba(245,240,232,0.3);
-    }
-
+    /* 修復 #6：移除重複的 .divider 定義，保留單一合併版本 */
     .divider {
       display: flex; align-items: center; gap: 12px;
       margin: 20px 0 16px;
@@ -269,10 +256,12 @@
 </div>
 
 <script>
-  let BACKEND = 'https://your-tunnel.trycloudflare.com'; // 預設值
+  let BACKEND = 'https://your-tunnel.trycloudflare.com';
+  let configLoaded = false; // 修復 #3：追蹤是否已載入
 
-  // 從 config.json 讀取後端網址
+  // 修復 #3：只在頁面初始化時載入一次 config
   async function loadConfig() {
+    if (configLoaded) return;
     try {
       const res  = await fetch('./config.json?t=' + Date.now());
       const data = await res.json();
@@ -282,8 +271,13 @@
       }
     } catch (e) {
       console.warn('[config] 讀取失敗，使用預設網址:', BACKEND);
+    } finally {
+      configLoaded = true;
     }
   }
+
+  // 頁面載入時立即執行一次
+  loadConfig();
 
   const nameInput = document.getElementById('nameInput');
   const enterBtn  = document.getElementById('enterBtn');
@@ -295,6 +289,7 @@
     if (e.key === 'Enter') handleEnter();
   });
 
+  // 修復 #4：移除重複的 keydown 綁定，只保留這一個
   idInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') handleId();
   });
@@ -319,8 +314,7 @@
     enterBtn.disabled = true;
     showStatus('連線中…', true);
 
-    // 確保 config 已載入
-    await loadConfig();
+    // 修復 #3：不再重複呼叫 loadConfig()，config 已在頁面載入時取得
     console.log('[enter] BACKEND:', BACKEND);
 
     let sessionId = '';
@@ -354,21 +348,16 @@
 
     } catch (e) {
       console.warn('[enter 失敗]', e.message);
-      // 後端無回應時用本地時間戳作為備用（格式與後端一致）
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
       sessionId = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     }
 
-    // 跳轉，把 username 和 session_id 帶進 URL
     window.location.href =
       `main.html?username=${encodeURIComponent(name)}&session_id=${encodeURIComponent(sessionId)}`;
   }
 
-  // ── ID 進入 ──
-  document.getElementById('idInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleId();
-  });
+  // 修復 #4：已移除此處原本重複的 idInput keydown 監聽器
 
   async function handleId() {
     const id = document.getElementById('idInput').value.trim().toUpperCase();
@@ -384,8 +373,7 @@
     document.getElementById('idBtn').disabled = true;
     showStatus('驗證中…', true);
 
-    await loadConfig();
-
+    // 修復 #3：不再重複呼叫 loadConfig()
     try {
       const res = await fetch(`${BACKEND}/enter_id`, {
         method:  'POST',

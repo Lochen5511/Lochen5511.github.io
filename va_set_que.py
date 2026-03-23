@@ -233,13 +233,7 @@ def make_question(n, total, used_concepts):
         stem = new_stem
         write_log(f'[命題{n}] 題幹修改={stem}')
 
-    send('請在聊天框輸入你的四個選項（A、B、C、D 各一行）：', delay=0.5)
-    options = wait_for_user()
-    if is_exit(options): return False
-    write_log(f'[命題{n}] 選項草稿={options}')
-
     send('請告訴我，你心中的正確答案：', delay=1)
-
     answer = wait_for_user()
     if is_exit(answer): return False
     print(f"[set_que] 題{n} 正確答案={answer[:60]}")
