@@ -672,7 +672,7 @@
   /* ── Append message ── */
   function appendMsg(text, role) {
     removeEmpty();
-    const label = role === 'user' ? userName : 'AI';
+    const label = role === 'user' ? userName : '艾評';
 
     const isButton   = text.startsWith('__BUTTON__') && !text.startsWith('__BUTTONS__');
     const isButtons  = text.startsWith('__BUTTONS__');
