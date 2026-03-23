@@ -118,7 +118,7 @@ def write_log(content):
 def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
     """呼叫 OpenAI，回傳回應文字"""
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model=model,
             temperature=temperature,
             messages=[
@@ -126,7 +126,7 @@ def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
                 {'role': 'user',   'content': user_prompt},
             ]
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message['content'].strip()
     except Exception as e:
         print(f"[OpenAI 失敗] {e}")
         return None
@@ -254,7 +254,7 @@ def main():
         send(f'（題目解析失敗，僅讀到 {len(questions)} 題，請聯絡助教。）')
         return
 
-    send('孿生 AI 學生正在作答中，請稍候…', delay=0.3)
+    send('孿生 AI 學生正在作答中，請稍候…', delay=1)
     _thinking(True)
 
     all_answers = []
@@ -308,7 +308,7 @@ def main():
 
     send(
         f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案，已儲存至 AnswerMatrix。',
-        delay=0.3
+        delay=1
     )
     write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')
     print("[que_ana.py] 執行完畢")
