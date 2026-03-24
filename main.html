@@ -891,6 +891,7 @@
           showModal(data.message.replace('__ALERT__', ''));
         } else {
           appendMsg(data.message, 'ai');
+          if (!data.message.startsWith('__')) logMsg('ai', data.message);
         }
       } else if (data.thinking && !typingBubble) {
         typingBubble = appendTyping();

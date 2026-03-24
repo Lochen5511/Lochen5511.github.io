@@ -1,475 +1,458 @@
-from flask import Flask, request, jsonify, Response
-from flask_cors import CORS
-from collections import defaultdict
-import os, subprocess, threading, json, time
-from datetime import datetime
+import argparse
+import time
+import requests
+import os
 
 # ──────────────────────────────────────────
-# 設定
+# 接收變數
 # ──────────────────────────────────────────
-LOG_DIR   = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
-BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-DB_PATH   = os.path.join(LOG_DIR, 'session_db.json')  # session 庫
+parser = argparse.ArgumentParser()
+parser.add_argument('--username',   default='未知')
+parser.add_argument('--session_id', default='')
+parser.add_argument('--log_path',   default='')
+args = parser.parse_args()
 
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+username   = args.username
+session_id = args.session_id
+log_path   = args.log_path
 
-@app.after_request
-def cors_headers(response):
-    response.headers['Access-Control-Allow-Origin']  = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+print(f"[set_que.py] 啟動  user={username}  session={session_id}")
 
-
-# ──────────────────────────────────────────
-# 狀態（記憶體）
-# ──────────────────────────────────────────
-message_queues    = defaultdict(list)
-thinking_states   = {}
-user_input_queues = defaultdict(list)
-launched_sessions = set()
-last_seen         = {}
-input_locked      = set()
-interrupted_sessions = set()   # ← 新增：記錄被中斷的 session
-
+BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
+TOTAL_QUE    = 8
 
 
 # ──────────────────────────────────────────
-# Session 庫（本地 JSON）
+# 工具函數
 # ──────────────────────────────────────────
-def load_db() -> dict:
+def _post(path, body):
     try:
-        if os.path.exists(DB_PATH):
-            with open(DB_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        requests.post(f"{BACKEND}{path}", json=body, timeout=5)
     except Exception as e:
-        print(f"[db 讀取失敗] {e}")
-    return {}
+        print(f"[post {path}] {e}")
 
-def save_db(db: dict):
+def _get(path, params=None):
     try:
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        with open(DB_PATH, 'w', encoding='utf-8') as f:
-            json.dump(db, f, ensure_ascii=False, indent=2)
+        res = requests.get(f"{BACKEND}{path}", params=params, timeout=5)
+        return res.json()
     except Exception as e:
-        print(f"[db 寫入失敗] {e}")
+        print(f"[get {path}] {e}")
+        return {}
 
-def register_session(username: str, session_id: str, log_path: str):
-    db = load_db()
-    db[session_id] = {
-        'username':  username,
-        'log_path':  log_path,
-        'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'unit':      None,
-        'return_id': None,
-    }
-    save_db(db)
-    print(f"[db] 登記 session={session_id} user={username}")
+def _thinking(state):
+    _post('/thinking', {'username': username, 'session_id': session_id, 'thinking': state})
 
-def update_session_unit(session_id: str, unit: str):
-    db = load_db()
-    if session_id in db:
-        db[session_id]['unit'] = unit
-        save_db(db)
-        print(f"[db] 更新 session={session_id} unit={unit}")
+def _lock(locked):
+    _post('/lock_input', {'session_id': session_id, 'locked': locked})
 
-def generate_return_id(session_id: str) -> str:
-    import random, string
-    db = load_db()
-    existing = {v.get('return_id') for v in db.values() if isinstance(v, dict) and v.get('return_id')}
+def send(text, delay=0):
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    _post('/push', {
+        'text': text, 'username': username,
+        'session_id': session_id, 'log_path': log_path,
+    })
+    print(f"[send] {text[:50]}")
+
+def send_buttons(labels, delay=0, colors=None, size='medium',
+                 sizes=None, button_ids=None):
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    n          = len(labels)
+    colors     = colors     or ['gold'] * n
+    button_ids = button_ids or labels
+    size_list  = sizes      or [size]  * n
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
+    _post('/push', {
+        'text': f'__BUTTONS__{parts}', 'username': username,
+        'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+    print(f"[buttons] {labels}")
+
+def send_checkbox(options, max_select=2, checkbox_id='cb', delay=0):
+    """發送多選 checkbox 元件，max_select 為最多可勾選數量"""
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    parts = '||'.join(options)
+    _post('/push', {
+        'text': f'__CHECKBOX__{checkbox_id}||{max_select}||{parts}',
+        'username': username, 'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+    print(f"[checkbox] max={max_select} opts={options}")
+
+def send_dropdown(options, placeholder='請選擇…',
+                  dropdown_id='dropdown', delay=0):
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    parts = '||'.join(options)
+    _post('/push', {
+        'text': f'__DROPDOWN__{dropdown_id}||{placeholder}||{parts}',
+        'username': username, 'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+    print(f"[dropdown] {options}")
+
+def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
+    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
-        rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        if rid not in existing:
-            break
-    if session_id in db:
-        db[session_id]['return_id'] = rid
-    if '__return_index__' not in db:
-        db['__return_index__'] = {}
-    db['__return_index__'][rid] = session_id
-    save_db(db)
-    print(f"[db] 產生 return_id={rid} for session={session_id}")
-    return rid
+        interrupted = _get('/check_interrupted', {'session_id': session_id})
+        if interrupted.get('interrupted', False):
+            write_log('[中斷] 用戶輸入 ID，流程中斷')
+            return '__INTERRUPTED__'
 
-def lookup_return_id(return_id: str) -> dict | None:
-    db = load_db()
-    index = db.get('__return_index__', {})
-    session_id = index.get(return_id)
-    if session_id:
-        return db.get(session_id)
-    return None
+        data = _get('/fetch_user_input', {'session_id': session_id})
+        msg  = data.get('message')
+        if msg:
+            _lock(False)
+            print(f"[user] {msg[:60]}")
+            return msg
 
-def lookup_session(session_id: str) -> dict | None:
-    db = load_db()
-    return db.get(session_id)
+        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
+        if not online.get('online', True):
+            write_log('用戶已離開系統')
+            return None
 
+        time.sleep(interval)
 
-# ──────────────────────────────────────────
-# 工具
-# ──────────────────────────────────────────
-def write_log(log_path: str, content: str):
+def write_log(content):
     if not log_path:
         return
     try:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        ts = datetime.now().strftime('%H:%M:%S')
         with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(f"[{ts}] {content}\n")
+            f.write(content + '\n')
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
-def launch_script(script: str, username: str, session_id: str, log_path: str):
-    subprocess.Popen(
-        ['python', script,
-         '--username',   username,
-         '--session_id', session_id,
-         '--log_path',   log_path],
-        cwd=BASE_DIR
+def is_exit(val):
+    """統一檢查是否為離開或中斷"""
+    return val is None or val == '__INTERRUPTED__'
+
+
+# ──────────────────────────────────────────
+# 單題流程
+# ──────────────────────────────────────────
+def make_question(n, total, used_concepts):
+    """
+    執行第 n 題的完整命題流程。
+    used_concepts: 已使用過的概念 set，用於排除下拉選單選項。
+    回傳 True 表示完成，False 表示用戶離開或中斷。
+    """
+    ALL_CONCEPTS = [
+        '內容效度',
+        '表面效度',
+        '同時效度',
+        '預測效度',
+        '建構效度（因素分析／聚斂區別）',
+        '信度—效度關係（必要但不充分）',
+    ]
+
+    write_log(f'\n── 第 {n}/{total} 題開始 ──')
+
+    # ── 概念選擇 ──
+    remaining_concepts = [c for c in ALL_CONCEPTS if c not in used_concepts]
+
+    if remaining_concepts:
+        send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
+        send_dropdown(
+            options     = remaining_concepts,
+            placeholder = '請選擇概念標籤…',
+            dropdown_id = f'dd_concept_{n}',
+        )
+        concept = wait_for_user()
+        if is_exit(concept): return False
+    else:
+        send('接下來，請在聊天框輸入你想要用來命題的核心觀念。', delay=1)
+        concept = wait_for_user()
+        if is_exit(concept): return False
+
+    used_concepts.add(concept)
+    print(f"[set_que] 題{n} 概念={concept}")
+
+    # ── 關卡一：題幹 ──
+    send((
+        '再來，請你寫出一個「看得懂、問得清楚」的題幹。'
+        '你可以先不用想選項，先把題幹寫出來就好。\n\n'
+        '如果你卡住，我給你三個很容易開始的題幹套路，選一個套進去就行：\n'
+        '・套路 A：證據判讀型\n'
+        '「老師用了___來檢核題目品質，這主要支持哪種效度證據？」\n\n'
+        '・套路 B：時間線索型（同時 vs 預測）\n'
+        '「測驗分數與___（當下／一年後）表現相關，這是哪種效度？」\n\n'
+        '・套路 C：推論型（信度≠效度）\n'
+        '「α很高／分數很穩定，能不能推論效度一定高？」\n\n'
+        '你想用哪一種？或你直接開始寫也可以。'
+        '一個完整的題幹，字數 ≥ 40 字，「2–4 句情境 + 1 句問句」'
+        '（請直接於聊天框輸入完整的題目。）'
+    ), delay=1)
+
+    stem = wait_for_user()
+    if is_exit(stem): return False
+    print(f"[set_que] 題{n} 題幹={stem[:60]}")
+
+    # ── 線索 ──
+    send((
+        '對了，你希望作答的人從題幹中核心判斷的線索是什麼？\n'
+        '例如：「同一時間點」「一年後」「雙向細目表」「因素分析」「α很高」'
+    ), delay=1)
+
+    clue = wait_for_user()
+    if is_exit(clue): return False
+    print(f"[set_que] 題{n} 線索={clue[:60]}")
+
+    write_log(f'[命題{n}] 概念={concept} | 題幹={stem} | 線索={clue}')
+
+    # ── 關卡二：選項 ──
+    while True:
+        send((
+            '好，我們進到關卡二。\n'
+            '這一關只做一件事：把你的四個選項寫出來，並且讓至少兩個錯選項「有意義」，'
+            '也就是能代表常見的錯誤想法。\n\n'
+            '小提示：如果你不知道錯選項怎麼寫，你可以考慮把正確概念改一個關鍵詞，'
+            '就會變成典型迷思。例如：把「當下」換成「一年後」。\n\n'
+            f'再看一次你的題幹：\n{stem}'
+        ), delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '需要修改'],
+            colors     = ['green', 'gray'],
+            size       = 'small',
+            button_ids = ['btn_stem_ok', 'btn_stem_edit']
+        )
+        stem_check = wait_for_user()
+        if is_exit(stem_check): return False
+        if 'btn_stem_ok' in stem_check:
+            break
+        # 需要修改：重新收集題幹
+        send('請重新輸入題幹：', delay=0.5)
+        new_stem = wait_for_user()
+        if is_exit(new_stem): return False
+        stem = new_stem
+        write_log(f'[命題{n}] 題幹修改={stem}')
+
+    send('請告訴我，你心中的正確答案：', delay=1)
+    answer = wait_for_user()
+    if is_exit(answer): return False
+    print(f"[set_que] 題{n} 正確答案={answer[:60]}")
+
+    # ── 三個錯誤選項（逐一確認）──
+    send('接著，請依序輸入三個錯誤的選項。', delay=1)
+
+    wrong_options = []
+    for i in range(1, 4):
+        while True:
+            send(f'請輸入第 {i} 個錯誤選項：', delay=0.5)
+            wrong = wait_for_user()
+            if is_exit(wrong): return False
+
+            send(f'你輸入的第 {i} 個錯誤選項是：\n{wrong}', delay=0.5)
+            send_buttons(
+                labels     = ['確認無誤', '我想修改'],
+                colors     = ['green', 'gray'],
+                size       = 'small',
+                button_ids = ['btn_confirm', 'btn_edit']
+            )
+            confirm = wait_for_user()
+            if is_exit(confirm): return False
+
+            if 'btn_confirm' in confirm:
+                wrong_options.append(wrong)
+                write_log(f'[命題{n}] 錯誤選項{i}={wrong}')
+                break
+
+    # ── 完整題目確認 ──
+    while True:
+        full_question = (
+            f'以下是你完成的題目：\n\n'
+            f'【題幹】\n{stem}\n\n'
+            f'A. {answer}\n'
+            f'B. {wrong_options[0]}\n'
+            f'C. {wrong_options[1]}\n'
+            f'D. {wrong_options[2]}\n\n'
+            f'（A 為正確答案）'
+        )
+        send(full_question, delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '我想修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_final_confirm', 'btn_final_edit']
+        )
+        final = wait_for_user()
+        if is_exit(final): return False
+
+        if 'btn_final_confirm' in final:
+            write_log(f'[命題{n}完成] stem={stem} | A={answer} | B={wrong_options[0]} | C={wrong_options[1]} | D={wrong_options[2]}')
+            break
+
+        # 修改
+        send('請發送完整的題幹：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        stem = v
+
+        send('請發送正確選項：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        answer = v
+
+        send('請發送錯誤選項（B）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[0] = v
+
+        send('請發送錯誤選項（C）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[1] = v
+
+        send('請發送錯誤選項（D）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[2] = v
+
+    # ── 關卡三：易錯選項分析 ──
+    send((
+        '接下來我想請你挑出兩個「最容易讓人選錯」的選項。\n'
+        '你不用挑全部，只要挑兩個就好。'
+    ), delay=1)
+
+    send_checkbox(
+        options     = [
+            f'B. {wrong_options[0]}',
+            f'C. {wrong_options[1]}',
+            f'D. {wrong_options[2]}',
+        ],
+        max_select  = 2,
+        checkbox_id = f'cb_pick_{n}',
     )
 
-
-# ──────────────────────────────────────────
-# Routes
-# ──────────────────────────────────────────
-
-# ── /enter ──────────────────────────────
-@app.route('/enter', methods=['POST', 'OPTIONS'])
-def enter():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data     = request.get_json() or {}
-    username = data.get('username', '').strip()
-
-    if not username:
-        return jsonify({'success': False, 'error': '名字不能為空'}), 400
-
-    os.makedirs(LOG_DIR, exist_ok=True)
-    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-
-    open(log_path, 'a', encoding='utf-8').close()
-
-    register_session(username, session_id, log_path)
-
-    print(f"[enter] username={username} session_id={session_id}")
-    return jsonify({'success': True, 'session_id': session_id})
-
-
-# ── /enter_id ───────────────────────────
-@app.route('/enter_id', methods=['POST', 'OPTIONS'])
-def enter_id():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data      = request.get_json() or {}
-    return_id = data.get('return_id', '').strip().upper()
-
-    if not return_id:
-        return jsonify({'success': False, 'error': '請輸入 ID'}), 400
-
-    record = lookup_return_id(return_id)
-    if not record:
-        return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
-
-    username = record['username']
-    log_path = record['log_path']
-
-    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-    write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
-    print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
-
-    return jsonify({
-        'success':    True,
-        'username':   username,
-        'session_id': session_id,
-    })
-
-
-# ── /greeting_set_que ───────────────────
-@app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
-def greeting_set_que():
-    """以 ID 進入時，直接啟動 set_que.py"""
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-
-    # 用 session_id 直接查找 log_path（修正：不再用 username 模糊比對）
-    record   = lookup_session(session_id)
-    if record:
-        log_path = record.get('log_path', '')
-    else:
-        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-
-    if session_id and session_id not in launched_sessions:
-        launched_sessions.add(session_id)
-        threading.Thread(
-            target=launch_script,
-            args=('va_set_que.py', username, session_id, log_path),
-            daemon=True
-        ).start()
-        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
-    else:
-        print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
-
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
-    return jsonify({'reply': reply})
-
-
-# ── /greeting ───────────────────────────
-@app.route('/greeting', methods=['POST', 'OPTIONS'])
-def greeting():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-
-    if session_id and session_id not in launched_sessions:
-        launched_sessions.add(session_id)
-        threading.Thread(
-            target=launch_script,
-            args=('button.py', username, session_id, log_path),
-            daemon=True
-        ).start()
-        print(f"[greeting] 啟動 button.py  session={session_id}")
-    else:
-        print(f"[greeting] session={session_id} 已啟動，跳過")
-
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
-    return jsonify({'reply': reply})
-
-
-# ── /generate_return_id ─────────────────
-@app.route('/generate_return_id', methods=['POST', 'OPTIONS'])
-def gen_return_id():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    rid        = generate_return_id(session_id)
-    return jsonify({'return_id': rid})
-
-
-# ── /lock_input ─────────────────────────
-@app.route('/lock_input', methods=['POST', 'OPTIONS'])
-def lock_input():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    locked     = data.get('locked', False)
-
-    if locked:
-        input_locked.add(session_id)
-    else:
-        input_locked.discard(session_id)
-
-    print(f"[lock_input] session={session_id} locked={locked}")
-    return jsonify({'success': True})
-
-
-# ── /update_unit ────────────────────────
-@app.route('/update_unit', methods=['POST', 'OPTIONS'])
-def update_unit():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    unit       = data.get('unit', '')
-
-    update_session_unit(session_id, unit)
-    return jsonify({'success': True})
-
-
-# ── /push ───────────────────────────────
-@app.route('/push', methods=['POST', 'OPTIONS'])
-def push():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    text       = data.get('text', '').strip()
-    session_id = data.get('session_id', '')
-    log_path   = data.get('log_path', '')
-
-    if not text:
-        return jsonify({'success': False}), 400
-
-    message_queues[session_id].append(text)
-    print(f"[push] session={session_id} queue_len={len(message_queues[session_id])} text={text[:40]}")
-
-    if log_path and not text.startswith('__'):
-        write_log(log_path, f"AI：{text}")
-
-    return jsonify({'success': True})
-
-
-# ── /poll ───────────────────────────────
-@app.route('/poll', methods=['GET', 'OPTIONS'])
-def poll():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id  = request.args.get('session_id', '')
-    queue       = message_queues.get(session_id, [])
-    is_thinking = thinking_states.get(session_id, False)
-
-    last_seen[session_id] = time.time()
-
-    if queue:
-        text = queue.pop(0)
-        print(f"[poll] session={session_id} 取出訊息 text={text[:40]}")
-        return jsonify({'message': text, 'thinking': False, 'input_locked': session_id in input_locked})
-
-    return jsonify({'message': None, 'thinking': is_thinking, 'input_locked': session_id in input_locked})
-
-
-# ── /check_online ───────────────────────
-@app.route('/check_online', methods=['GET', 'OPTIONS'])
-def check_online():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-    timeout    = float(request.args.get('timeout', USER_TIMEOUT))
-    seen       = last_seen.get(session_id)
-
-    if seen is None or (time.time() - seen) > timeout:
-        return jsonify({'online': False})
-    return jsonify({'online': True})
-
-
-# ── /check_interrupted ──────────────────  ← 新增
-@app.route('/check_interrupted', methods=['GET', 'OPTIONS'])
-def check_interrupted():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-
-    if session_id in interrupted_sessions:
-        interrupted_sessions.discard(session_id)   # 取出後清除，只觸發一次
-        return jsonify({'interrupted': True})
-
-    return jsonify({'interrupted': False})
-
-
-# ── /thinking ───────────────────────────
-@app.route('/thinking', methods=['POST', 'OPTIONS'])
-def thinking():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    state      = data.get('thinking', False)
-    thinking_states[session_id] = state
-    return jsonify({'success': True})
-
-
-# ── /button_click ───────────────────────
-@app.route('/button_click', methods=['POST', 'OPTIONS'])
-def button_click():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    message    = data.get('message', '').strip()
-    session_id = data.get('session_id', '')
-    username   = data.get('username', '未知').strip()
-
-    if not message:
-        return jsonify({'reply': ''}), 400
-
-    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-    write_log(log_path, f"用戶：{message}")
-
-    user_input_queues[session_id].append(message)
-    print(f"[button_click] session={session_id} message={message[:40]}")
-    return jsonify({'reply': ''})
-
-
-# ── /chat ───────────────────────────────
-@app.route('/chat', methods=['POST', 'OPTIONS'])
-def chat():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    message    = data.get('message', '').strip()
-    session_id = data.get('session_id', '')
-    username   = data.get('username', '未知').strip()
-
-    if not message:
-        return jsonify({'reply': ''}), 400
-
-    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-    write_log(log_path, f"用戶：{message}")
-
-    if session_id in input_locked:
-        print(f"[chat] session={session_id} 輸入框鎖定，忽略訊息: {message[:40]}")
-        return jsonify({'reply': ''})
-
-    user_input_queues[session_id].append(message)
-    print(f"[chat] session={session_id} message={message[:40]}")
-    return jsonify({'reply': ''})
-
-
-# ── /fetch_user_input ───────────────────
-@app.route('/fetch_user_input', methods=['GET', 'OPTIONS'])
-def fetch_user_input():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-    queue      = user_input_queues.get(session_id, [])
-
-    if queue:
-        msg = queue.pop(0)
-        print(f"[fetch_user_input] session={session_id} message={msg[:40]}")
-        return jsonify({'message': msg})
-
-    return jsonify({'message': None})
-
-
-# ── /log ────────────────────────────────
-@app.route('/log', methods=['POST', 'OPTIONS'])
-def log_message():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-    role       = data.get('role', 'unknown')
-    message    = data.get('message', '').strip()
-
-    if not message:
-        return jsonify({'success': False}), 400
-
-    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-    label    = '用戶' if role == 'user' else 'AI'
-    write_log(log_path, f"{label}：{message}")
-
-    return jsonify({'success': True})
+    # 第一個選擇
+    first_pick = wait_for_user()
+    if is_exit(first_pick): return False
+    first_raw    = first_pick.replace('cb_first:', '').strip()
+    first_label  = first_raw
+    first_option = first_raw.split('. ', 1)[-1] if '. ' in first_raw else first_raw
+
+    # 第二個選擇
+    _lock(True)
+    second_pick = wait_for_user()
+    if is_exit(second_pick): return False
+    second_raw    = second_pick.replace('cb_second:', '').strip()
+    second_label  = second_raw
+    second_option = second_raw.split('. ', 1)[-1] if '. ' in second_raw else second_raw
+
+    write_log(f'[命題{n}] 易錯選項1={first_label} | 易錯選項2={second_label}')
+
+    send(
+        f'好，那我們先看「{first_option}」。\n'
+        '如果有人選了它，你猜他最可能是怎麼想的？',
+        delay=1
+    )
+    guess_first = wait_for_user()
+    if is_exit(guess_first): return False
+    write_log(f'[命題{n}] 易錯推測1={guess_first}')
+
+    send(
+        f'再來看「{second_option}」。\n'
+        '你覺得選它的人最可能是哪種想法搞錯？',
+        delay=1
+    )
+    guess_second = wait_for_user()
+    if is_exit(guess_second): return False
+    write_log(f'[命題{n}] 易錯推測2={guess_second}')
+
+    # ── 易錯分析確認 ──
+    while True:
+        summary = (
+            f'以下是你分析的兩個易錯選項：\n\n'
+            f'【{first_label}】\n推測想法：{guess_first}\n\n'
+            f'【{second_label}】\n推測想法：{guess_second}'
+        )
+        send(summary, delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '我想修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_guess_confirm', 'btn_guess_edit']
+        )
+        confirm = wait_for_user()
+        if is_exit(confirm): return False
+
+        if 'btn_guess_confirm' in confirm:
+            write_log(f'[命題{n}] 易錯分析確認完成')
+            break
+
+        send(f'請重新輸入「{first_label}」的易錯推測：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        guess_first = v
+
+        send(f'請重新輸入「{second_label}」的易錯推測：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        guess_second = v
+
+        write_log(f'[命題{n}] 易錯推測修改 | 1={guess_first} | 2={guess_second}')
+
+    return True
 
 
 # ──────────────────────────────────────────
-# 啟動
+# 主要執行區塊
 # ──────────────────────────────────────────
+def main():
+    send((
+        f'嗨，{username}歡迎回來。我們進到下一步了。\n'
+        '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
+        '我會用三個小關卡帶你走。\n'
+        '你不用一次就寫得很完美，只要一關一關完成就好。'
+    ), delay=1)
+
+    send_buttons(
+        labels     = ['開始命題'],
+        colors     = ['gold'],
+        size       = 'medium',
+        button_ids = ['btn_start_que']
+    )
+
+    user_reply = wait_for_user()
+    if is_exit(user_reply):
+        return
+
+    # ── 8 題迴圈 ──
+    used_concepts = set()
+    for n in range(1, TOTAL_QUE + 1):
+        if n > 1:
+            remaining = TOTAL_QUE - (n - 1)
+            send((
+                f'接著，請再出 {remaining} 題'
+                f'（我們總共要出 {TOTAL_QUE} 題），'
+                f'讓我們繼續出第 {n} 題。'
+            ), delay=1)
+
+        ok = make_question(n, TOTAL_QUE, used_concepts)
+        if not ok:
+            print(f"[set_que.py] 第 {n} 題中斷，結束流程")
+            return
+
+    send(
+        '很好，現在你已經完成命題，讓我召喚「孿生AI學生」來試做你的題目吧！',
+        delay=1
+    )
+
+    import subprocess
+    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
+    subprocess.Popen(
+        ['python', 'va_que_ana.py'] + base_args,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+
+    print("[set_que.py] 全部 8 題完成，已啟動 que_ana.py")
+
+
 if __name__ == '__main__':
-    print("✅ name.py 伺服器啟動中...")
-    print(f"📁 Log 資料夾：{LOG_DIR}")
-    print(f"📋 Session 庫：{DB_PATH}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    main()

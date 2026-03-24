@@ -4,7 +4,6 @@ import requests
 import os
 import openai
 from dotenv import load_dotenv
-from datetime import datetime
 
 # ──────────────────────────────────────────
 # 環境變數 & OpenAI
@@ -111,9 +110,8 @@ def write_log(content):
     if not log_path:
         return
     try:
-        ts = datetime.now().strftime('%H:%M:%S')
         with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(f"[{ts}] {content}\n")
+            f.write(content + '\n')
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
