@@ -113,8 +113,9 @@ def write_log(log_path: str, content: str):
         return
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        ts = datetime.now().strftime('%H:%M:%S')
         with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(content + '\n')
+            f.write(f"[{ts}] {content}\n")
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
