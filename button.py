@@ -137,20 +137,17 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
     等待用戶回應。
     timeout   : 無 /poll 超過此秒數視為離線，回傳 None
     wait_limit: 等待作答的上限秒數（不管是否在線），超過回傳 None
-                預設 None 表示無上限
     """
     import time as _time
     start = _time.time()
 
     while True:
-        # 等待上限檢查
         if wait_limit and (_time.time() - start) > wait_limit:
             print(f"[wait_for_user] 等待超時 wait_limit={wait_limit}s")
             _write_log(f'[逾時] 等待作答超過 {wait_limit} 秒，流程中斷')
             _lock(False)
             return None
 
-        # 檢查是否被中斷
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
             print(f"[wait_for_user] session={session_id} 被 ID 輸入中斷")
@@ -158,7 +155,6 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
             _lock(False)
             return '__INTERRUPTED__'
 
-        # 先取用戶輸入（優先）
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
@@ -166,7 +162,6 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
             print(f"[user] {msg[:60]}")
             return msg
 
-        # 再檢查是否在線
         online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
         if not online.get('online', True):
             print(f"[wait_for_user] 用戶已離開 session={session_id}")
@@ -178,12 +173,13 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
 
 
 def _write_log(content: str):
-    """寫入 log 檔"""
+    """寫入後端結構化 log（含時間戳記）"""
     if not log_path:
         return
     try:
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(content + '\n')
+            f.write(f"[{ts}] {content}\n")
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
@@ -218,12 +214,10 @@ def main():
 
     user_reply = wait_for_user()
 
-    # 用戶已離開
     if user_reply is None:
         print("[button.py] 用戶已離開，結束流程")
         return
 
-    # 流程被 ID 輸入中斷
     if user_reply == '__INTERRUPTED__':
         print("[button.py] 流程被中斷")
         return

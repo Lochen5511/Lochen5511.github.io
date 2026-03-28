@@ -32,6 +32,7 @@
       overflow: hidden;
     }
 
+    /* ── Layout ── */
     .app {
       display: flex; flex-direction: column;
       height: 100vh;
@@ -40,6 +41,7 @@
       position: relative;
     }
 
+    /* ── Header ── */
     header {
       display: flex; align-items: center; justify-content: center;
       padding: 18px 24px;
@@ -69,6 +71,7 @@
     }
     .user-badge strong { color: var(--gold-dim); font-weight: 400; }
 
+    /* ── Messages ── */
     .messages {
       flex: 1; overflow-y: auto;
       padding: 24px 20px;
@@ -81,6 +84,7 @@
       background: rgba(201,168,76,0.15); border-radius: 2px;
     }
 
+    /* Empty state */
     .empty {
       flex: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 10px;
@@ -96,6 +100,7 @@
       font-size: 14px; letter-spacing: 0.15em; color: var(--muted);
     }
 
+    /* ── Message row ── */
     .msg {
       display: flex; gap: 10px;
       align-items: flex-start; width: 100%;
@@ -151,6 +156,7 @@
     }
     .msg.user .msg-time { text-align: right; }
 
+    /* ── Dropdown ── */
     .msg-dropdown {
       margin-top: 6px;
       display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
@@ -181,6 +187,7 @@
     .msg-dropdown .dd-confirm:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
     .msg-dropdown .dd-confirm:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
+    /* ── Typing indicator ── */
     .typing-indicator {
       display: flex; gap: 5px; align-items: center;
       padding: 14px 16px;
@@ -193,6 +200,7 @@
     .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
     .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
+    /* ── Buttons ── */
     .btn-row {
       display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;
     }
@@ -219,6 +227,7 @@
     .btn-bubble.gray    { border-color: #777; color: #999; }
     .btn-bubble.gray:hover  { background: rgba(136,136,136,0.14); color: #ddd; }
 
+    /* ── Modal ── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.65); z-index: 100;
@@ -246,6 +255,7 @@
     }
     .modal-close:hover { background: rgba(201,168,76,0.14); color: var(--cream); }
 
+    /* ── Input area ── */
     .input-area {
       padding: 14px 18px 18px;
       border-top: 1px solid var(--border);
@@ -291,6 +301,7 @@
       font-size: 11px; letter-spacing: 0.1em; color: var(--muted); opacity: 0.55;
     }
 
+    /* ── Checkbox 多選元件 ── */
     .msg-checkbox { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
     .msg-checkbox .cb-item {
       display: flex; align-items: center; gap: 10px;
@@ -325,6 +336,7 @@
     .msg-checkbox .cb-confirm:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
     .msg-checkbox.locked .cb-item { pointer-events: none; opacity: 0.5; }
 
+    /* ── Stats panel tab ── */
     .stats-tab {
       position: fixed;
       right: 0; top: 50%;
@@ -348,6 +360,7 @@
     .stats-tab:hover { background: var(--surface2); color: var(--cream); }
     .stats-tab.visible { display: block; }
 
+    /* ── Stats panel ── */
     .stats-panel {
       position: fixed;
       right: -380px; top: 0; bottom: 0;
@@ -390,18 +403,16 @@
       background: rgba(201,168,76,0.15); border-radius: 2px;
     }
 
-    .chart-block {
-      display: flex; flex-direction: column; gap: 10px;
-    }
+    /* ── 每題長條圖區塊 ── */
+    .chart-block { display: flex; flex-direction: column; gap: 10px; }
     .chart-label {
       font-family: 'Cormorant Garamond', serif;
       font-size: 13px; letter-spacing: 0.2em; color: var(--gold-dim);
       text-align: center;
     }
-    .chart-wrap {
-      position: relative; width: 100%; height: 160px;
-    }
+    .chart-wrap { position: relative; width: 100%; height: 160px; }
 
+    /* ── 作答人數 ── */
     .stats-footer {
       margin-top: 4px; padding: 14px 0 4px;
       border-top: 1px solid var(--border);
@@ -410,12 +421,14 @@
       font-size: 13px; letter-spacing: 0.15em; color: var(--muted);
     }
 
+    /* ── Animations ── */
     @keyframes msgIn  { to { opacity: 1; transform: translateY(0); } }
     @keyframes bounce {
       0%,60%,100% { transform: translateY(0); }
       30%         { transform: translateY(-6px); }
     }
 
+    /* ── Mobile ── */
     @media (max-width: 600px) {
       .messages { padding: 14px 10px; }
       .msg { gap: 8px; }
@@ -430,14 +443,16 @@
 
 <div class="app">
 
+  <!-- Modal -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
       <div class="modal-icon">⚠</div>
       <p class="modal-msg" id="modalMsg"></p>
-      <button class="modal-close" id="modalCloseBtn">確認</button>
+      <button class="modal-close" onclick="closeModal()">確認</button>
     </div>
   </div>
 
+  <!-- Header -->
   <header>
     <div class="hd">
       <div class="line"></div><div class="diamond"></div>
@@ -449,6 +464,7 @@
     <div class="user-badge" id="userBadge"></div>
   </header>
 
+  <!-- Messages -->
   <div class="messages" id="messages">
     <div class="empty" id="emptyState">
       <div class="icon">✦</div>
@@ -456,10 +472,11 @@
     </div>
   </div>
 
+  <!-- Input -->
   <div class="input-area">
     <div class="input-row">
       <textarea id="msgInput" placeholder="輸入訊息…" rows="1" maxlength="2000"></textarea>
-      <button class="btn-send" id="sendBtn" title="傳送 (Enter)">
+      <button class="btn-send" id="sendBtn" onclick="sendMessage()" title="傳送 (Enter)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -472,19 +489,20 @@
 
 </div>
 
-<button class="stats-tab" id="statsTab">孿生學生作答分析</button>
+<!-- Stats tab & panel（在 .app 外，fixed 定位）-->
+<button class="stats-tab" id="statsTab" onclick="togglePanel()">孿生學生作答分析</button>
 
 <div class="stats-panel" id="statsPanel">
   <div class="stats-panel-header">
     <span class="stats-panel-title">孿生學生作答分析</span>
-    <button class="stats-panel-close" id="statsPanelClose">✕</button>
+    <button class="stats-panel-close" onclick="togglePanel()">✕</button>
   </div>
   <div class="stats-panel-body" id="statsPanelBody"></div>
 </div>
 
 <script>
   /* ── 設定 ── */
-  let BACKEND      = 'https://your-tunnel.trycloudflare.com';
+  let BACKEND = 'https://your-tunnel.trycloudflare.com';
   let configLoaded = false;
 
   async function loadConfig() {
@@ -492,20 +510,23 @@
     try {
       const res  = await fetch('./config.json?t=' + Date.now());
       const data = await res.json();
-      if (data.backend) BACKEND = data.backend;
+      if (data.backend) {
+        BACKEND = data.backend;
+        console.log('[config] 後端網址:', BACKEND);
+      }
     } catch (e) {
-      console.warn('[config] 讀取失敗，使用預設網址');
+      console.warn('[config] 讀取失敗，使用預設網址:', BACKEND);
     } finally {
       configLoaded = true;
     }
   }
 
+  loadConfig();
+
   /* ── URL 參數 ── */
   const params    = new URLSearchParams(window.location.search);
   const userName  = params.get('username')   || '使用者';
   const sessionId = params.get('session_id') || '';
-
-  if (!sessionId) { window.location.href = 'enter.html'; }
 
   document.getElementById('userBadge').innerHTML = `<strong>${userName}</strong>`;
 
@@ -527,19 +548,19 @@
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
-  sendBtn.addEventListener('click', sendMessage);
 
-  /* ── Stats panel ── */
-  let panelOpen = false;
-  document.getElementById('statsTab').addEventListener('click', togglePanel);
-  document.getElementById('statsPanelClose').addEventListener('click', togglePanel);
-  function togglePanel() {
-    panelOpen = !panelOpen;
-    document.getElementById('statsPanel').classList.toggle('open', panelOpen);
+  /* ── Helpers ── */
+  function getTime() {
+    return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
   }
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\n/g,'<br>');
+  }
+  function scrollBottom() { msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' }); }
+  function removeEmpty()  { if (emptyEl.parentNode) emptyEl.remove(); }
 
   /* ── Modal ── */
-  document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
   function showModal(msg) {
     document.getElementById('modalMsg').textContent = msg;
     document.getElementById('modalOverlay').classList.add('show');
@@ -548,65 +569,50 @@
     document.getElementById('modalOverlay').classList.remove('show');
   }
 
-  /* ── Helpers ── */
-  function getTime() {
-    return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-  }
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-      .replace(/\n/g, '<br>');
-  }
-  function scrollBottom() { msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' }); }
-  function removeEmpty()  { if (emptyEl && emptyEl.parentNode) emptyEl.remove(); }
-
-  /* ── Log（統一寫入入口）── */
-  function logMsg(role, message) {
-    post('/log', { username: userName, session_id: sessionId, role, message });
+  /* ── Stats panel ── */
+  let panelOpen = false;
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById('statsPanel').classList.toggle('open', panelOpen);
   }
 
-  /* ── Chart 顏色 ── */
+  /* ── 圓餅圖顏色 ── */
   const PIE_COLORS = {
     A: 'rgba(201,168,76,0.85)',
     B: 'rgba(106,170,191,0.85)',
     C: 'rgba(106,191,105,0.85)',
     D: 'rgba(191,106,106,0.85)',
   };
+
   const chartInstances = {};
 
   function renderCharts(stats, nStudents) {
     const body = document.getElementById('statsPanelBody');
     body.innerHTML = '';
-    Object.keys(chartInstances).forEach(k => {
-      chartInstances[k].destroy();
-      delete chartInstances[k];
-    });
+    Object.values(chartInstances).forEach(c => c.destroy());
 
-    const keys = Object.keys(stats).sort((a, b) =>
-      parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', ''))
+    const keys = Object.keys(stats).sort((a,b) =>
+      parseInt(a.replace('Q','')) - parseInt(b.replace('Q',''))
     );
 
     keys.forEach((key, idx) => {
       const counts = stats[key];
       const labels = Object.keys(counts);
       const values = Object.values(counts);
+      const qNum   = idx + 1;
 
-      const block  = document.createElement('div');
+      const block = document.createElement('div');
       block.className = 'chart-block';
 
       const lbl = document.createElement('div');
       lbl.className   = 'chart-label';
-      lbl.textContent = `第 ${idx + 1} 題`;
+      lbl.textContent = `第 ${qNum} 題`;
       block.appendChild(lbl);
 
-      const wrap   = document.createElement('div');
+      const wrap = document.createElement('div');
       wrap.className = 'chart-wrap';
       const canvas = document.createElement('canvas');
-      canvas.id    = `bar_${key}`;
+      canvas.id = `bar_${key}`;
       wrap.appendChild(canvas);
       block.appendChild(wrap);
       body.appendChild(block);
@@ -614,7 +620,7 @@
       chartInstances[key] = new Chart(canvas, {
         type: 'bar',
         data: {
-          labels,
+          labels: labels,
           datasets: [{
             data:            values,
             backgroundColor: labels.map(l => PIE_COLORS[l] || '#888'),
@@ -661,18 +667,6 @@
     const isDropdown = text.startsWith('__DROPDOWN__');
     const isCheckbox = text.startsWith('__CHECKBOX__');
     const isData     = text.startsWith('__DATA__');
-
-    // __DATA__ 不插入訊息列，直接解析渲染圖表
-    if (isData) {
-      try {
-        const payload = JSON.parse(text.replace('__DATA__', ''));
-        if (payload?.type === 'answer_matrix' && payload.stats && payload.n_students != null) {
-          renderCharts(payload.stats, payload.n_students);
-        }
-      } catch (e) { console.warn('[data parse]', e); }
-      return;
-    }
-
     let content = '';
 
     if (isCheckbox) {
@@ -681,114 +675,58 @@
       const cbId   = parts[0] || 'cb';
       const maxSel = parseInt(parts[1]) || 2;
       const opts   = parts.slice(2);
-
-      const wrap = document.createElement('div');
-      wrap.className = 'msg-checkbox';
-      wrap.id        = `cbwrap_${cbId}`;
-
-      opts.forEach((o, i) => {
-        const label = document.createElement('label');
-        label.className = 'cb-item';
-        label.id        = `cbitem_${cbId}_${i}`;
-
-        const box = document.createElement('div');
-        box.className = 'cb-box';
-        box.id        = `cbbox_${cbId}_${i}`;
-
-        const span = document.createElement('span');
-        span.textContent = o;
-
-        label.appendChild(box);
-        label.appendChild(span);
-        label.addEventListener('click', () => toggleCb(cbId, i, maxSel));
-        wrap.appendChild(label);
-      });
-
-      const confirmBtn = document.createElement('button');
-      confirmBtn.className   = 'cb-confirm';
-      confirmBtn.id          = `cbconfirm_${cbId}`;
-      confirmBtn.disabled    = true;
-      confirmBtn.innerHTML   = `確認（已選 <span id="cbcount_${cbId}">0</span>/${maxSel}）`;
-      confirmBtn.addEventListener('click', () => confirmCb(cbId, opts));
-      wrap.appendChild(confirmBtn);
-
-      const div = document.createElement('div');
-      div.className = `msg ${role}`;
-      div.innerHTML = `
-        <div class="avatar-col">
-          <div class="avatar"><img src="head.jpg" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
-          <span class="avatar-name">${label}</span>
-        </div>
-        <div class="msg-body" id="msgbody_cb_${cbId}">
-          <div class="msg-time">${getTime()}</div>
-        </div>`;
-      div.querySelector('.msg-body').insertBefore(wrap, div.querySelector('.msg-time'));
-      msgList.appendChild(div);
-      scrollBottom();
-      return div;
-
+      const items  = opts.map((o, i) => `
+        <label class="cb-item" id="cbitem_${cbId}_${i}" onclick="toggleCb('${cbId}',${i},${maxSel})">
+          <div class="cb-box" id="cbbox_${cbId}_${i}"></div>
+          <span>${escHtml(o)}</span>
+        </label>`).join('');
+      content = `<div class="msg-checkbox" id="cbwrap_${cbId}">
+        ${items}
+        <button class="cb-confirm" id="cbconfirm_${cbId}" disabled
+          onclick="confirmCb('${cbId}','${opts.join('||')}')">確認（已選 <span id="cbcount_${cbId}">0</span>/${maxSel}）</button>
+      </div>`;
+    } else if (isData) {
+      try {
+        const payload = JSON.parse(text.replace('__DATA__', ''));
+        if (payload.type === 'answer_matrix') {
+          renderCharts(payload.stats, payload.n_students);
+        }
+      } catch(e) { console.warn('[data parse]', e); }
+      return;
     } else if (isDropdown) {
-      const raw      = text.replace('__DROPDOWN__', '');
-      const parts    = raw.split('||');
-      const ddId     = parts[0] || 'dropdown';
+      const raw         = text.replace('__DROPDOWN__', '');
+      const parts       = raw.split('||');
+      const ddId        = parts[0] || 'dropdown';
       const placeholder = parts[1] || '請選擇…';
-      const options  = parts.slice(2);
-
-      const wrap = document.createElement('div');
-      wrap.className = 'msg-dropdown';
-      wrap.id        = `ddwrap_${ddId}`;
-
-      const sel = document.createElement('select');
-      sel.id    = `sel_${ddId}`;
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value    = '';
-      defaultOpt.disabled = true;
-      defaultOpt.selected = true;
-      defaultOpt.textContent = placeholder;
-      sel.appendChild(defaultOpt);
-      options.forEach(o => {
-        const opt = document.createElement('option');
-        opt.value       = o;
-        opt.textContent = o;
-        sel.appendChild(opt);
-      });
-
-      const confirmBtn = document.createElement('button');
-      confirmBtn.className   = 'dd-confirm';
-      confirmBtn.textContent = '確認';
-      confirmBtn.addEventListener('click', () => confirmDropdown(ddId));
-
-      wrap.appendChild(sel);
-      wrap.appendChild(confirmBtn);
-      content = wrap.outerHTML;
-
+      const options     = parts.slice(2);
+      const opts        = options.map(o =>
+        `<option value="${escHtml(o)}">${escHtml(o)}</option>`
+      ).join('');
+      content = `<div class="msg-dropdown" id="ddwrap_${ddId}">
+        <select id="sel_${ddId}">
+          <option value="" disabled selected>${placeholder}</option>
+          ${opts}
+        </select>
+        <button class="dd-confirm" onclick="confirmDropdown('${ddId}')">確認</button>
+      </div>`;
     } else if (isButtons) {
       const groupId = 'grp_' + Date.now();
       const parts   = text.replace('__BUTTONS__', '').split(';');
-
-      const row = document.createElement('div');
-      row.className        = 'btn-row';
-      row.dataset.group    = groupId;
-
-      parts.forEach(p => {
+      const btns    = parts.map(p => {
         const [lbl, col, sz, bid] = p.split('||');
-        const btn = document.createElement('button');
-        btn.className        = `btn-bubble ${col || 'gold'} ${sz || 'medium'}`;
-        btn.dataset.group    = groupId;
-        btn.textContent      = lbl || '';
-        btn.addEventListener('click', () => clickBtn(btn, lbl || '', bid || lbl || '', groupId));
-        row.appendChild(btn);
-      });
-      content = row.outerHTML;
-
+        return `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
+          data-group="${groupId}"
+          onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}','${groupId}')">
+          ${escHtml(lbl||'')}
+        </button>`;
+      }).join('');
+      content = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
     } else if (isButton) {
-      const [lbl, col, sz, bid] = text.replace('__BUTTON__', '').split('||');
-      const btn = document.createElement('button');
-      btn.className   = `btn-bubble ${col || 'gold'} ${sz || 'medium'}`;
-      btn.textContent = lbl || '';
-      btn.addEventListener('click', () => clickBtn(btn, lbl || '', bid || lbl || ''));
-      content = btn.outerHTML;
-
+      const [lbl, col, sz, bid] = text.replace('__BUTTON__','').split('||');
+      content = `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
+        onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}')">
+        ${escHtml(lbl||'')}
+      </button>`;
     } else {
       content = `<div class="bubble">${escHtml(text)}</div>`;
     }
@@ -813,9 +751,7 @@
 
   /* ── Typing bubble ── */
   let typingBubble = null;
-
   function appendTyping() {
-    removeTyping(); // 確保只存在一個
     removeEmpty();
     const div = document.createElement('div');
     div.className = 'msg ai';
@@ -830,11 +766,9 @@
         </div>
       </div>`;
     msgList.appendChild(div);
-    typingBubble = div;
     scrollBottom();
     return div;
   }
-
   function removeTyping() {
     if (typingBubble) { typingBubble.remove(); typingBubble = null; }
   }
@@ -861,11 +795,13 @@
 
     const count = sel.size;
     document.getElementById(`cbcount_${cbId}`).textContent = count;
-    document.getElementById(`cbconfirm_${cbId}`).disabled = (count !== maxSel);
+    const btn = document.getElementById(`cbconfirm_${cbId}`);
+    btn.disabled = (count !== maxSel);
   }
 
-  function confirmCb(cbId, opts) {
+  function confirmCb(cbId, optsRaw) {
     const sel    = _cbSelected[cbId] || new Set();
+    const opts   = optsRaw.split('||');
     const chosen = [...sel].sort().map(i => opts[i]);
 
     const wrap = document.getElementById(`cbwrap_${cbId}`);
@@ -874,19 +810,16 @@
 
     const msg = chosen.join('，');
     appendMsg(msg, 'user');
-    // ── log 寫入：使用者的選擇 ──
     logMsg('user', msg);
 
-    // 逐一送出每個選擇（通用，支援任意 maxSel）
-    chosen.forEach((val, i) => {
-      setTimeout(() => {
-        post('/button_click', {
-          message: `cb_choice_${i + 1}:${val}`,
-          username: userName,
-          session_id: sessionId,
-        });
-      }, i * 300);
+    post('/button_click', {
+      message: `cb_first:${chosen[0]}`, username: userName, session_id: sessionId,
     });
+    setTimeout(() => {
+      post('/button_click', {
+        message: `cb_second:${chosen[1]}`, username: userName, session_id: sessionId,
+      });
+    }, 300);
   }
 
   function confirmDropdown(ddId) {
@@ -897,7 +830,6 @@
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
     appendMsg(val, 'user');
-    // ── log 寫入：使用者的選擇 ──
     logMsg('user', val);
     post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
@@ -913,34 +845,36 @@
     appendMsg(label, 'user');
     removeTyping();
     typingBubble = appendTyping();
-    // ── log 寫入：使用者點擊按鈕 ──
     logMsg('user', `[按鈕:${buttonId}] ${label}`);
     post('/button_click', { message: `${buttonId}:${label}`, username: userName, session_id: sessionId });
   }
 
-  /* ── API helpers ── */
   async function post(path, body) {
     try {
       await fetch(`${BACKEND}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-    } catch (e) { console.warn(`[post ${path}]`, e.message); }
+    } catch(e) { console.warn(`[post ${path}]`, e.message); }
   }
 
-  async function post_r(path, body) {
-    return fetch(`${BACKEND}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+  /* ── Log（統一寫入入口）── */
+  /* 修改：加入時間戳記，並擴大涵蓋範圍至 __ALERT__ 與所有 AI 訊息 */
+  function logMsg(role, message) {
+    const now = new Date();
+    const ts  = now.getFullYear()
+      + '-' + String(now.getMonth() + 1).padStart(2, '0')
+      + '-' + String(now.getDate()).padStart(2, '0')
+      + ' ' + String(now.getHours()).padStart(2, '0')
+      + ':' + String(now.getMinutes()).padStart(2, '0')
+      + ':' + String(now.getSeconds()).padStart(2, '0');
+    post('/log', { username: userName, session_id: sessionId, role, message, timestamp: ts });
   }
 
-  /* ── Poll（遞迴 setTimeout，避免堆積）── */
-  let pollActive = false;
+  if (!sessionId) { window.location.href = 'enter.html'; }
 
-  async function doPoll() {
+  /* ── Poll（每 300ms）── */
+  setInterval(async () => {
     if (!sessionId) return;
     try {
       const res  = await fetch(`${BACKEND}/poll?session_id=${encodeURIComponent(sessionId)}`);
@@ -951,14 +885,14 @@
         if (data.message.startsWith('__ALERT__')) {
           const alertText = data.message.replace('__ALERT__', '');
           showModal(alertText);
-          // ── log 寫入：Alert 訊息 ──
+          /* 修改：__ALERT__ 也寫入 log */
           logMsg('ai', `[ALERT] ${alertText}`);
         } else if (data.message.startsWith('__DATA__')) {
-          // __DATA__ 只渲染圖表，不寫入對話 log
+          /* 修改：__DATA__ 只渲染圖表，不寫入對話 log */
           appendMsg(data.message, 'ai');
         } else {
           appendMsg(data.message, 'ai');
-          // ── log 寫入：所有 AI 對話訊息（含 __BUTTON__、__BUTTONS__ 等 UI 元件）──
+          /* 修改：所有 AI 訊息（含 __BUTTON__、__BUTTONS__、__DROPDOWN__、__CHECKBOX__）統一寫入 log */
           logMsg('ai', data.message);
         }
       } else if (data.thinking && !typingBubble) {
@@ -967,42 +901,27 @@
         removeTyping();
       }
 
-      const locked  = data.input_locked === true;
+      const locked = data.input_locked === true;
       input.disabled    = locked;
       sendBtn.disabled  = locked;
       input.placeholder = locked ? '請點擊上方按鈕作答…' : '輸入訊息…';
-    } catch (e) {
-      console.warn('[poll]', e.message);
-    }
-  }
-
-  function startPoll() {
-    if (!pollActive) return;
-    doPoll().finally(() => {
-      if (pollActive) setTimeout(startPoll, 1000);
-    });
-  }
+    } catch(e) { console.warn('[poll]', e.message); }
+  }, 300);
 
   /* ── Greeting ── */
   window.addEventListener('load', async () => {
-    // 先載入 config，再啟動 poll，避免競態條件
     await loadConfig();
-
-    pollActive = true;
-    startPoll();
-
     typingBubble = appendTyping();
     const mode  = params.get('mode') || '';
     const route = mode === 'set_que' ? '/greeting_set_que' : '/greeting';
     try {
-      const res   = await post_r(route, { username: userName, session_id: sessionId });
-      const data  = await res.json();
+      const res  = await post_r(route, { username: userName, session_id: sessionId });
+      const data = await res.json();
       removeTyping();
       const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(reply, 'ai');
-      // ── log 寫入：greeting 訊息 ──
       logMsg('ai', reply);
-    } catch (e) {
+    } catch(e) {
       removeTyping();
       const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
       appendMsg(fallback, 'ai');
@@ -1010,12 +929,18 @@
     }
   });
 
+  async function post_r(path, body) {
+    return fetch(`${BACKEND}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
   /* ── Send message ── */
   async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
     appendMsg(text, 'user');
-    // ── log 寫入：使用者輸入訊息 ──
     logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';

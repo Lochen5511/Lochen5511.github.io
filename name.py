@@ -1,15 +1,15 @@
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from collections import defaultdict
-import os, subprocess, threading, json, time, uuid
+import os, subprocess, threading, json, time
 from datetime import datetime
 
 # ──────────────────────────────────────────
 # 設定
 # ──────────────────────────────────────────
-LOG_DIR  = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH  = os.path.join(LOG_DIR, 'session_db.json')
+LOG_DIR   = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+DB_PATH   = os.path.join(LOG_DIR, 'session_db.json')
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -25,12 +25,12 @@ def cors_headers(response):
 # ──────────────────────────────────────────
 # 狀態（記憶體）
 # ──────────────────────────────────────────
-message_queues       = defaultdict(list)
-thinking_states      = {}
-user_input_queues    = defaultdict(list)
-launched_sessions    = set()
-last_seen            = {}
-input_locked         = set()
+message_queues    = defaultdict(list)
+thinking_states   = {}
+user_input_queues = defaultdict(list)
+launched_sessions = set()
+last_seen         = {}
+input_locked      = set()
 interrupted_sessions = set()
 
 USER_TIMEOUT = 300
@@ -39,8 +39,6 @@ USER_TIMEOUT = 300
 # ──────────────────────────────────────────
 # Session 庫（本地 JSON）
 # ──────────────────────────────────────────
-db_lock = threading.Lock()
-
 def load_db() -> dict:
     try:
         if os.path.exists(DB_PATH):
@@ -51,13 +49,12 @@ def load_db() -> dict:
     return {}
 
 def save_db(db: dict):
-    with db_lock:
-        try:
-            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-            with open(DB_PATH, 'w', encoding='utf-8') as f:
-                json.dump(db, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"[db 寫入失敗] {e}")
+    try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        with open(DB_PATH, 'w', encoding='utf-8') as f:
+            json.dump(db, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[db 寫入失敗] {e}")
 
 def register_session(username: str, session_id: str, log_path: str):
     db = load_db()
@@ -80,60 +77,52 @@ def update_session_unit(session_id: str, unit: str):
 
 def generate_return_id(session_id: str) -> str:
     import random, string
-    with db_lock:
-        db       = load_db()
-        existing = {v.get('return_id') for v in db.values()
-                    if isinstance(v, dict) and v.get('return_id')}
-        while True:
-            rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            if rid not in existing:
-                break
-        if session_id in db:
-            db[session_id]['return_id'] = rid
-        if '__return_index__' not in db:
-            db['__return_index__'] = {}
-        db['__return_index__'][rid] = session_id
-        # 直接寫入（已在鎖內，不呼叫 save_db 避免死鎖）
-        try:
-            with open(DB_PATH, 'w', encoding='utf-8') as f:
-                json.dump(db, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"[db 寫入失敗] {e}")
+    db = load_db()
+    existing = {v.get('return_id') for v in db.values() if isinstance(v, dict) and v.get('return_id')}
+    while True:
+        rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if rid not in existing:
+            break
+    if session_id in db:
+        db[session_id]['return_id'] = rid
+    if '__return_index__' not in db:
+        db['__return_index__'] = {}
+    db['__return_index__'][rid] = session_id
+    save_db(db)
     print(f"[db] 產生 return_id={rid} for session={session_id}")
     return rid
 
 def lookup_return_id(return_id: str) -> dict | None:
-    db    = load_db()
+    db = load_db()
     index = db.get('__return_index__', {})
-    sid   = index.get(return_id)
-    return db.get(sid) if sid else None
+    session_id = index.get(return_id)
+    if session_id:
+        return db.get(session_id)
+    return None
 
 def lookup_session(session_id: str) -> dict | None:
-    return load_db().get(session_id)
+    db = load_db()
+    return db.get(session_id)
 
 
 # ──────────────────────────────────────────
 # 工具
 # ──────────────────────────────────────────
 def write_log(log_path: str, content: str):
-    """統一 log 寫入工具（僅供後端結構化紀錄使用）"""
+    """後端結構化紀錄寫入（含時間戳記）"""
     if not log_path:
         return
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(content + '\n')
+            f.write(f"[{ts}] {content}\n")
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
-def _make_session_id() -> str:
-    """產生不易碰撞的 session ID（時間戳 + 隨機後綴）"""
-    return datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:6]
-
 def launch_script(script: str, username: str, session_id: str, log_path: str):
-    import sys
     subprocess.Popen(
-        [sys.executable, script,
+        ['python', script,
          '--username',   username,
          '--session_id', session_id,
          '--log_path',   log_path],
@@ -158,11 +147,10 @@ def enter():
         return jsonify({'success': False, 'error': '名字不能為空'}), 400
 
     os.makedirs(LOG_DIR, exist_ok=True)
-    session_id = _make_session_id()
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
 
-    with open(log_path, 'a', encoding='utf-8'):
-        pass
+    open(log_path, 'a', encoding='utf-8').close()
 
     register_session(username, session_id, log_path)
 
@@ -186,12 +174,10 @@ def enter_id():
     if not record:
         return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
 
-    username   = record['username']
-    log_path   = record['log_path']
-    session_id = _make_session_id()
+    username = record['username']
+    log_path = record['log_path']
 
-    # 新 session 寫入 DB，確保 lookup_session 可以找到
-    register_session(username, session_id, log_path)
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
     print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
@@ -214,8 +200,10 @@ def greeting_set_que():
     session_id = data.get('session_id', '')
 
     record   = lookup_session(session_id)
-    log_path = record.get('log_path', '') if record else \
-               os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    if record:
+        log_path = record.get('log_path', '')
+    else:
+        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
@@ -224,11 +212,12 @@ def greeting_set_que():
             args=('va_set_que.py', username, session_id, log_path),
             daemon=True
         ).start()
-        print(f"[greeting_set_que] 啟動 va_set_que.py session={session_id}")
+        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
     else:
         print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
 
-    return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'})
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    return jsonify({'reply': reply})
 
 
 # ── /greeting ───────────────────────────
@@ -240,10 +229,7 @@ def greeting():
     data       = request.get_json() or {}
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
-
-    record   = lookup_session(session_id)
-    log_path = record.get('log_path', '') if record else \
-               os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
@@ -252,11 +238,12 @@ def greeting():
             args=('button.py', username, session_id, log_path),
             daemon=True
         ).start()
-        print(f"[greeting] 啟動 button.py session={session_id}")
+        print(f"[greeting] 啟動 button.py  session={session_id}")
     else:
         print(f"[greeting] session={session_id} 已啟動，跳過")
 
-    return jsonify({'reply': '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'})
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    return jsonify({'reply': reply})
 
 
 # ── /generate_return_id ─────────────────
@@ -313,14 +300,13 @@ def push():
     data       = request.get_json() or {}
     text       = data.get('text', '').strip()
     session_id = data.get('session_id', '')
+    log_path   = data.get('log_path', '')
 
     if not text:
         return jsonify({'success': False}), 400
 
     message_queues[session_id].append(text)
     print(f"[push] session={session_id} queue_len={len(message_queues[session_id])} text={text[:40]}")
-
-    # ── log 寫入已移除：由 main.html logMsg() → /log 統一處理 ──
 
     return jsonify({'success': True})
 
@@ -397,11 +383,10 @@ def button_click():
     data       = request.get_json() or {}
     message    = data.get('message', '').strip()
     session_id = data.get('session_id', '')
+    username   = data.get('username', '未知').strip()
 
     if not message:
         return jsonify({'reply': ''}), 400
-
-    # ── log 寫入已移除：由 main.html logMsg() → /log 統一處理 ──
 
     user_input_queues[session_id].append(message)
     print(f"[button_click] session={session_id} message={message[:40]}")
@@ -417,6 +402,7 @@ def chat():
     data       = request.get_json() or {}
     message    = data.get('message', '').strip()
     session_id = data.get('session_id', '')
+    username   = data.get('username', '未知').strip()
 
     if not message:
         return jsonify({'reply': ''}), 400
@@ -424,8 +410,6 @@ def chat():
     if session_id in input_locked:
         print(f"[chat] session={session_id} 輸入框鎖定，忽略訊息: {message[:40]}")
         return jsonify({'reply': ''})
-
-    # ── log 寫入已移除：由 main.html logMsg() → /log 統一處理 ──
 
     user_input_queues[session_id].append(message)
     print(f"[chat] session={session_id} message={message[:40]}")
@@ -450,7 +434,8 @@ def fetch_user_input():
 
 
 # ── /log ────────────────────────────────
-# 這是 main.html 的統一寫入入口，所有對話訊息皆由此寫入
+# main.html 統一寫入入口
+# 修改：接收前端傳入的 timestamp，寫入格式為 [timestamp] 角色：訊息
 @app.route('/log', methods=['POST', 'OPTIONS'])
 def log_message():
     if request.method == 'OPTIONS':
@@ -461,17 +446,24 @@ def log_message():
     session_id = data.get('session_id', '')
     role       = data.get('role', 'unknown')
     message    = data.get('message', '').strip()
+    timestamp  = data.get('timestamp', '')  # 修改：接收前端時間戳記
 
     if not message:
         return jsonify({'success': False}), 400
 
-    # 從 DB 取得正確的 log_path，確保與後端結構化紀錄寫入同一個檔案
-    record   = lookup_session(session_id)
-    log_path = record.get('log_path', '') if record else \
-               os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    label    = '用戶' if role == 'user' else 'AI'
 
-    label = '用戶' if role == 'user' else 'AI'
-    write_log(log_path, f"{label}：{message}")
+    # 修改：若前端有傳入時間戳記則使用，否則由後端產生
+    if not timestamp:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f"[{timestamp}] {label}：{message}\n")
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
 
     return jsonify({'success': True})
 
@@ -483,4 +475,4 @@ if __name__ == '__main__':
     print("✅ name.py 伺服器啟動中...")
     print(f"📁 Log 資料夾：{LOG_DIR}")
     print(f"📋 Session 庫：{DB_PATH}")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)
