@@ -13,13 +13,13 @@
       --bg:       #13110e;
       --surface:  #1c1814;
       --surface2: #242018;
-      --border:   rgba(201,168,76,0.18);
+      --border:   rgba(255, 193, 23, 0.78);
       --gold:     #c9a84c;
       --gold-dim: rgba(201,168,76,0.55);
       --cream:    #f0ebe0;
       --muted:    rgba(240,235,224,0.38);
-      --user-bg:  #2a2318;
-      --ai-bg:    #1c1814;
+      --user-bg:  #1d82b5;
+      --ai-bg:    #8c8a87;
       --radius:   14px;
       --panel-w:  340px;
     }
@@ -918,12 +918,12 @@
       const res  = await post_r(route, { username: userName, session_id: sessionId });
       const data = await res.json();
       removeTyping();
-      const reply = data.reply || '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      const reply = data.reply || '> 系統初始化失敗，請聯絡助教（u11301126@go.utaipei.edu.tw）。)';
       appendMsg(reply, 'ai');
       logMsg('ai', reply);
     } catch(e) {
       removeTyping();
-      const fallback = '> 系統初始化中。\n(若3分鐘內未有下一步，請重新開啟頁面)';
+      const fallback = '> 系統初始化失敗，請聯絡助教（u11301126@go.utaipei.edu.tw）。)';
       appendMsg(fallback, 'ai');
       logMsg('ai', fallback);
     }
