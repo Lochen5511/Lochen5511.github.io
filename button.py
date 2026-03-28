@@ -137,12 +137,17 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
     等待用戶回應。
     timeout   : 無 /poll 超過此秒數視為離線，回傳 None
     wait_limit: 等待作答的上限秒數（不管是否在線），超過回傳 None
+    注意：check_online 依賴前端 poll 更新 last_seen，
+          因此前幾秒不做離線判斷，避免 last_seen 尚未建立就誤判離線。
     """
     import time as _time
     start = _time.time()
+    ONLINE_CHECK_DELAY = 10  # 啟動後前 10 秒不做離線判斷
 
     while True:
-        if wait_limit and (_time.time() - start) > wait_limit:
+        elapsed = _time.time() - start
+
+        if wait_limit and elapsed > wait_limit:
             print(f"[wait_for_user] 等待超時 wait_limit={wait_limit}s")
             _write_log(f'[逾時] 等待作答超過 {wait_limit} 秒，流程中斷')
             _lock(False)
@@ -162,12 +167,14 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
             print(f"[user] {msg[:60]}")
             return msg
 
-        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
-        if not online.get('online', True):
-            print(f"[wait_for_user] 用戶已離開 session={session_id}")
-            _write_log('用戶已離開系統')
-            _lock(False)
-            return None
+        # 前 ONLINE_CHECK_DELAY 秒內不判斷離線，等待前端 poll 建立 last_seen
+        if elapsed >= ONLINE_CHECK_DELAY:
+            online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
+            if not online.get('online', True):
+                print(f"[wait_for_user] 用戶已離開 session={session_id}")
+                _write_log('用戶已離開系統')
+                _lock(False)
+                return None
 
         time.sleep(interval)
 
