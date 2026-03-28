@@ -1,8 +1,8 @@
 import argparse
+import sys
 import time
 import requests
 import os
-from datetime import datetime
 
 # ──────────────────────────────────────────
 # 接收來自 button.py 的變數
@@ -17,96 +17,38 @@ username   = args.username
 session_id = args.session_id
 log_path   = args.log_path
 
+BACKEND      = 'http://localhost:5000'
+USER_TIMEOUT = 300
+
 
 # ──────────────────────────────────────────
 # 工具函數
 # ──────────────────────────────────────────
-def _set_thinking(state):
+def _post(path, body):
     try:
-        requests.post('http://localhost:5000/thinking', json={
-            'username': username, 'session_id': session_id, 'thinking': state})
-    except: pass
-
-def send(text, delay=0):
-    if delay > 0:
-        _set_thinking(True); time.sleep(delay); _set_thinking(False)
-    try:
-        requests.post('http://localhost:5000/push', json={
-            'text': text, 'username': username,
-            'session_id': session_id, 'log_path': log_path})
+        requests.post(f'{BACKEND}{path}', json=body, timeout=5)
     except Exception as e:
-        print(f"[送出失敗] {e}")
+        print(f"[post {path}] {e}")
+
+def _get(path, params=None):
+    try:
+        res = requests.get(f'{BACKEND}{path}', params=params, timeout=5)
+        return res.json()
+    except Exception as e:
+        print(f"[get {path}] {e}")
+        return {}
+
+def _thinking(state):
+    _post('/thinking', {'username': username, 'session_id': session_id, 'thinking': state})
 
 def _lock(locked: bool):
-    try:
-        requests.post('http://localhost:5000/lock_input', json={
-            'session_id': session_id, 'locked': locked}, timeout=5)
-    except: pass
+    _post('/lock_input', {'session_id': session_id, 'locked': locked})
 
-def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button_ids=None):
-    if delay > 0:
-        _set_thinking(True); time.sleep(delay); _set_thinking(False)
-    n = len(labels)
-    colors     = colors     or ['gold'] * n
-    button_ids = button_ids or labels
-    size_list  = sizes if sizes else [size] * n
-    parts = ';'.join(
-        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
-        for i in range(n)
-    )
-    try:
-        requests.post('http://localhost:5000/push', json={
-            'text': f'__BUTTONS__{parts}', 'username': username,
-            'session_id': session_id, 'log_path': ''})
-        _lock(True)  # 按鈕出現後鎖定
-    except Exception as e:
-        print(f"[多按鈕失敗] {e}")
+def is_exit(val) -> bool:
+    return val is None or val == '__INTERRUPTED__'
 
-USER_TIMEOUT = 300
-
-def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
-    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
-    while True:
-        # 檢查是否被中斷
-        try:
-            res = requests.get('http://localhost:5000/check_interrupted',
-                               params={'session_id': session_id})
-            if res.json().get('interrupted', False):
-                write_log('[中斷] 用戶輸入 ID，流程中斷')
-                return '__INTERRUPTED__'
-        except: pass
-
-        # 檢查是否在線
-        try:
-            res = requests.get('http://localhost:5000/check_online',
-                               params={'session_id': session_id, 'timeout': timeout})
-            if not res.json().get('online', True):
-                write_log('用戶已離開系統')
-                return None
-        except: pass
-
-        # 先取用戶輸入（優先）
-        try:
-            res = requests.get('http://localhost:5000/fetch_user_input',
-                               params={'session_id': session_id})
-            data = res.json()
-            if data.get('message'):
-                _lock(False)
-                return data['message']
-        except: pass
-
-        # 再檢查是否在線
-        try:
-            res = requests.get('http://localhost:5000/check_online',
-                               params={'session_id': session_id, 'timeout': timeout})
-            if not res.json().get('online', True):
-                write_log('用戶已離開系統')
-                return None
-        except: pass
-
-        time.sleep(interval)
-
-def write_log(content):
+def write_log(content: str):
+    """後端結構化紀錄（作答資料、摘要、中斷事件等不經過 main.html 的內容）"""
     if not log_path:
         return
     try:
@@ -115,9 +57,67 @@ def write_log(content):
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
+def send(text, delay=0):
+    if delay > 0:
+        _thinking(True)
+        time.sleep(delay)
+        _thinking(False)
+    _post('/push', {
+        'text': text, 'username': username,
+        'session_id': session_id, 'log_path': log_path,
+    })
+    print(f"[send] {text[:50]}")
+
+def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button_ids=None):
+    if delay > 0:
+        _thinking(True)
+        time.sleep(delay)
+        _thinking(False)
+    n          = len(labels)
+    colors     = colors     or ['gold'] * n
+    button_ids = button_ids or labels
+    size_list  = sizes if sizes else [size] * n
+    parts = ';'.join(
+        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
+        for i in range(n)
+    )
+    _post('/push', {
+        'text': f'__BUTTONS__{parts}', 'username': username,
+        'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+
+
+def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
+    """
+    等待用戶回應。
+    中斷與離開事件不經過 main.html，由此處直接寫入後端 log。
+    """
+    while True:
+        interrupted = _get('/check_interrupted', {'session_id': session_id})
+        if interrupted.get('interrupted', False):
+            write_log('[中斷] 用戶輸入 ID，流程中斷')
+            _lock(False)
+            return '__INTERRUPTED__'
+
+        data = _get('/fetch_user_input', {'session_id': session_id})
+        msg  = data.get('message')
+        if msg:
+            _lock(False)
+            print(f"[user] {msg[:60]}")
+            return msg
+
+        online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
+        if not online.get('online', True):
+            write_log('用戶已離開系統')
+            _lock(False)
+            return None
+
+        time.sleep(interval)
+
 
 # ──────────────────────────────────────────
-# 題庫（出題順序：V1_GATE→V2_1→V2_2→V1_1→VX_1→V1_2→V3_1→V3_2）
+# 題庫
 # ──────────────────────────────────────────
 QUESTIONS = [
     {
@@ -256,6 +256,8 @@ QUESTIONS = [
     },
 ]
 
+VALID_KEYS = {'A', 'B', 'C', 'D'}
+
 
 # ──────────────────────────────────────────
 # 出題流程
@@ -270,10 +272,15 @@ def ask_question(q, index, total):
     )
 
     ans_reply = wait_for_user()
-    if ans_reply is None or ans_reply == '__INTERRUPTED__':
-        return ans_reply  # 傳遞中斷／離開狀態
+    if is_exit(ans_reply):
+        return ans_reply
 
+    # 解析作答鍵值，加入驗證
     chosen_key = ans_reply.split(':')[0].replace('ans_', '').strip()
+    if chosen_key not in VALID_KEYS:
+        write_log(f'[警告] {q["item_id"]} 無效作答值: {ans_reply}')
+        chosen_key = '?'
+
     print(f"[作答] item={q['item_id']} answer={chosen_key}")
 
     send('請評估你對這個答案的把握度：', delay=0.3)
@@ -285,15 +292,23 @@ def ask_question(q, index, total):
     )
 
     conf_reply = wait_for_user()
-    if conf_reply is None or conf_reply == '__INTERRUPTED__':
+    if is_exit(conf_reply):
         return conf_reply
 
-    confidence   = int(conf_reply.split(':')[0].replace('conf_', '').strip())
+    try:
+        confidence = int(conf_reply.split(':')[0].replace('conf_', '').strip())
+        if not (1 <= confidence <= 5):
+            raise ValueError(f"超出範圍: {confidence}")
+    except ValueError as e:
+        write_log(f'[警告] {q["item_id"]} 信心值解析失敗: {conf_reply} ({e})')
+        confidence = 0
+
     print(f"[信心] item={q['item_id']} confidence={confidence}")
 
     is_correct   = (chosen_key == q['key'])
     mistake_code = q['option_to_code'].get(chosen_key)
 
+    # ── 結構化作答紀錄（不經過 main.html，直接寫入後端 log）──
     write_log(
         f'[{q["item_id"]}] '
         f'answer={chosen_key} | '
@@ -324,21 +339,19 @@ def main():
     for i, q in enumerate(QUESTIONS, start=1):
         result = ask_question(q, i, total)
 
-        # 用戶中途離開或被中斷
-        if result is None or result == '__INTERRUPTED__':
+        if is_exit(result):
+            # ── 中斷事件：不經過 main.html，直接寫入後端 log ──
             if result == '__INTERRUPTED__':
                 write_log(f'[中斷] 用戶於第 {i}/{total} 題輸入 ID，流程中斷')
-                print(f"[validity.py] 第 {i} 題被中斷")
             else:
                 write_log(f'[中斷] 用戶於第 {i}/{total} 題離開')
-                print(f"[validity.py] 用戶於第 {i} 題離開")
             return
 
         results.append(result)
         time.sleep(0.5)
 
     correct_count = sum(1 for r in results if r['is_correct'])
-    avg_conf      = sum(r['confidence'] for r in results) / total
+    avg_conf      = sum(r['confidence'] for r in results) / len(results) if results else 0
     mistake_codes = [r['mistake_code'] for r in results if r['mistake_code']]
 
     summary = (
@@ -347,9 +360,9 @@ def main():
     )
     send(summary, delay=0.3)
 
-    # 產生並發送隨機 ID
+    # 產生並發送 return_id
     try:
-        res = requests.post('http://localhost:5000/generate_return_id',
+        res = requests.post(f'{BACKEND}/generate_return_id',
                             json={'session_id': session_id}, timeout=5)
         return_id = res.json().get('return_id', '')
     except Exception as e:
@@ -362,8 +375,10 @@ def main():
             '請記下這組 ID，下次回來時在聊天框輸入即可繼續下一階段。',
             delay=0.3
         )
+        # ── 結構化紀錄 ID（對話訊息本身已由 main.html logMsg 寫入）──
         write_log(f'[ID] return_id={return_id}')
 
+    # ── 結構化摘要（不是對話訊息，直接寫入後端 log）──
     write_log(
         f'[摘要] correct={correct_count}/{total} | '
         f'avg_confidence={avg_conf:.2f} | '

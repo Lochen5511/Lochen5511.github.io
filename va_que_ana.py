@@ -1,15 +1,23 @@
 import argparse
+import sys
 import time
 import requests
 import os
-import openai
+import csv
+import json
+import re
+
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # ──────────────────────────────────────────
 # 環境變數 & OpenAI
 # ──────────────────────────────────────────
-load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
-openai.api_key = os.getenv("AIKEY")
+load_dotenv()  # 自動尋找當前目錄的 .env
+_api_key = os.getenv("AIKEY")
+if not _api_key:
+    raise ValueError("[va_que_ana] AIKEY 環境變數未設定，請在 .env 中加入 AIKEY=...")
+openai_client = OpenAI(api_key=_api_key)
 
 # ──────────────────────────────────────────
 # 接收變數
@@ -24,10 +32,14 @@ username   = args.username
 session_id = args.session_id
 log_path   = args.log_path
 
-print(f"[que_ana.py] 啟動  user={username}  session={session_id}")
+print(f"[va_que_ana.py] 啟動  user={username}  session={session_id}")
 
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
+
+LOG_DIR      = os.path.dirname(log_path) if log_path else os.path.dirname(os.path.abspath(__file__))
+WIDE_TABLE   = os.path.join(LOG_DIR, 'validity_wide_table.csv')
+MAX_STUDENTS = 30
 
 
 # ──────────────────────────────────────────
@@ -53,40 +65,40 @@ def _thinking(state):
 def _lock(locked):
     _post('/lock_input', {'session_id': session_id, 'locked': locked})
 
+def is_exit(val) -> bool:
+    return val is None or val == '__INTERRUPTED__'
+
+def write_log(content: str):
+    """後端結構化紀錄（執行紀錄、中斷事件等不經過 main.html 的內容）"""
+    if not log_path:
+        return
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(content + '\n')
+    except Exception as e:
+        print(f"[log 寫入失敗] {e}")
+
 def send(text, delay=0):
     if delay > 0:
-        _thinking(True); time.sleep(delay); _thinking(False)
+        _thinking(True)
+        time.sleep(delay)
+        _thinking(False)
     _post('/push', {
         'text': text, 'username': username,
         'session_id': session_id, 'log_path': log_path,
     })
     print(f"[send] {text[:50]}")
 
-def send_buttons(labels, delay=0, colors=None, size='medium',
-                 sizes=None, button_ids=None):
-    if delay > 0:
-        _thinking(True); time.sleep(delay); _thinking(False)
-    n          = len(labels)
-    colors     = colors     or ['gold'] * n
-    button_ids = button_ids or labels
-    size_list  = sizes      or [size]  * n
-    parts = ';'.join(
-        f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
-        for i in range(n)
-    )
-    _post('/push', {
-        'text': f'__BUTTONS__{parts}', 'username': username,
-        'session_id': session_id, 'log_path': '',
-    })
-    _lock(True)
-    print(f"[buttons] {labels}")
-
 def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
-    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
+    """
+    等待用戶回應。
+    中斷與離開事件不經過 main.html，由此處直接寫入後端 log。
+    """
     while True:
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
             write_log('[中斷] 用戶輸入 ID，流程中斷')
+            _lock(False)
             return '__INTERRUPTED__'
 
         data = _get('/fetch_user_input', {'session_id': session_id})
@@ -99,43 +111,15 @@ def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
         online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
         if not online.get('online', True):
             write_log('用戶已離開系統')
+            _lock(False)
             return None
 
         time.sleep(interval)
 
-def is_exit(val):
-    return val is None or val == '__INTERRUPTED__'
 
-def write_log(content):
-    if not log_path:
-        return
-    try:
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(content + '\n')
-    except Exception as e:
-        print(f"[log 寫入失敗] {e}")
-
-def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
-    """呼叫 OpenAI，回傳回應文字"""
-    try:
-        response = openai.ChatCompletion.create(
-            model=model,
-            temperature=temperature,
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user',   'content': user_prompt},
-            ]
-        )
-        return response.choices[0].message['content'].strip()
-    except Exception as e:
-        print(f"[OpenAI 失敗] {e}")
-        return None
-
-
-LOG_DIR      = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
-WIDE_TABLE   = os.path.join(LOG_DIR, 'validity_wide_table.csv')
-MAX_STUDENTS = 30
-
+# ──────────────────────────────────────────
+# OpenAI
+# ──────────────────────────────────────────
 SYSTEM_PROMPT = """\
 請依據以下註釋與學生的認知數值，預測這個學生回答以下八題的答案，依據「A,A,A,A,A,A,A,A」的格式生成答案。
 
@@ -146,8 +130,8 @@ high_conf_wrong_ratio = 信心分數 ≥ 4 但答錯的題目數 ÷ 總題數。
 V1a = V_FACE_OVERUSE（用外觀直覺當主要效度證據）
 V1b = V_CONTENT_CRITERION_CONFUSE（把效標關聯/相關/預測的證據誤當內容效度或反之）
 V1c = V_RELIABILITY_AS_VALIDITY（把信度指標/α 當效度證據）
-V2a = V_CONCUR_PRED_SWAP（同時效度與預測效度顛倒）
-V2b = V_TIME_BLIND（忽略時間線索，只要看到「相關」就固定選某一類）
+V2a = V_CONCUR_PRED_SWAP（同時效度與預測效度顛倒：V2_1 選 B、V2_2 選 A）
+V2b = V_FIXED_TYPE（固著型：兩題都答錯，且都選同一個非正確選項）
 X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不充分不懂/推反/否認關係）
 V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
@@ -155,10 +139,33 @@ V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效
 只輸出答案，格式嚴格為「X,X,X,X,X,X,X,X」（8 個大寫字母，以逗號分隔），不要任何其他文字。\
 """
 
+VALID_ANSWERS = {'A', 'B', 'C', 'D'}
 
+def ask_openai(system_prompt: str, user_prompt: str,
+               model: str = 'gpt-4o', temperature: float = 0.7) -> str | None:
+    """呼叫 OpenAI，加入最多 3 次 retry"""
+    for attempt in range(3):
+        try:
+            response = openai_client.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user',   'content': user_prompt},
+                ]
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[OpenAI 失敗 attempt={attempt+1}] {e}")
+            if attempt < 2:
+                time.sleep(2)
+    return None
+
+
+# ──────────────────────────────────────────
+# 資料處理
+# ──────────────────────────────────────────
 def load_wide_table() -> list:
-    """讀取 validity_wide_table.csv，回傳 dict list"""
-    import csv
     rows = []
     try:
         with open(WIDE_TABLE, 'r', encoding='utf-8') as f:
@@ -172,7 +179,6 @@ def load_wide_table() -> list:
 
 
 def row_to_prompt(row: dict, questions: list) -> str:
-    """將一列 CSV 資料與題目轉成 user prompt"""
     stats = (
         f"accuracy={row.get('accuracy','')}  "
         f"avg_confidence={row.get('avg_confidence','')}  "
@@ -190,10 +196,10 @@ def row_to_prompt(row: dict, questions: list) -> str:
 
 
 def save_answer_matrix(answers: list):
-    """將所有答案存入 {username}_AnswerMatrix.csv"""
-    import csv
-    out_path = os.path.join(LOG_DIR, f"{username}_AnswerMatrix.csv")
-    header   = [f'Q{i+1}' for i in range(8)]
+    # 清理 username 中的特殊字元，避免不合法檔名
+    safe_name = re.sub(r'[^\w\-]', '_', username)
+    out_path  = os.path.join(LOG_DIR, f"{safe_name}_AnswerMatrix.csv")
+    header    = [f'Q{i+1}' for i in range(8)]
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -201,15 +207,18 @@ def save_answer_matrix(answers: list):
             for row in answers:
                 writer.writerow(row)
         print(f"[AnswerMatrix] 已儲存：{out_path}（{len(answers)} 筆）")
-        write_log(f'[que_ana] AnswerMatrix 已儲存：{out_path}')
+        # ── 後端執行紀錄（不是對話訊息）──
+        write_log(f'[va_que_ana] AnswerMatrix 已儲存：{out_path}')
     except Exception as e:
         print(f"[AnswerMatrix 儲存失敗] {e}")
 
 
 def parse_questions_from_log() -> list:
     """
-    從 log_path 解析 set_que.py 寫入的命題紀錄。
+    從 log_path 解析 va_set_que.py 寫入的命題紀錄。
     格式：[命題N完成] stem=... | A=... | B=... | C=... | D=...
+    注意：此解析依賴 log 格式，若題幹或選項含 | 或 = 字元可能失準。
+    建議未來改用 JSON 結構化儲存。
     """
     questions = []
     if not log_path or not os.path.exists(log_path):
@@ -239,6 +248,9 @@ def parse_questions_from_log() -> list:
     return questions
 
 
+# ──────────────────────────────────────────
+# 主要執行區塊
+# ──────────────────────────────────────────
 def main():
     rows = load_wide_table()
     if not rows:
@@ -246,34 +258,39 @@ def main():
         return
 
     target_rows = rows[:MAX_STUDENTS]
-    total       = len(target_rows)
-    print(f"[que_ana] 將生成 {total} 筆孿生答案")
+    if len(rows) > MAX_STUDENTS:
+        print(f"[va_que_ana] 資料共 {len(rows)} 筆，僅使用前 {MAX_STUDENTS} 筆")
 
     questions = parse_questions_from_log()
     if len(questions) < 8:
         send(f'（題目解析失敗，僅讀到 {len(questions)} 題，請聯絡助教。）')
         return
 
+    total = len(target_rows)
+    print(f"[va_que_ana] 將生成 {total} 筆孿生答案")
+
     send('孿生 AI 學生正在作答中，請稍候…', delay=1)
-    _thinking(True)
 
     all_answers = []
-    for idx, row in enumerate(target_rows):
-        user_prompt = row_to_prompt(row, questions)
-        reply       = ask_openai(SYSTEM_PROMPT, user_prompt, temperature=0.3)
+    _thinking(True)
+    try:
+        for idx, row in enumerate(target_rows):
+            user_prompt = row_to_prompt(row, questions)
+            reply       = ask_openai(SYSTEM_PROMPT, user_prompt, temperature=0.3)
 
-        if not reply:
-            print(f"[que_ana] 第 {idx+1} 筆 OpenAI 無回應，跳過")
-            continue
+            if not reply:
+                print(f"[va_que_ana] 第 {idx+1} 筆 OpenAI 無回應，跳過")
+                continue
 
-        parts = [p.strip().upper() for p in reply.split(',')]
-        if len(parts) == 8 and all(p in 'ABCD' for p in parts):
-            all_answers.append(parts)
-            print(f"[que_ana] 第 {idx+1} 筆：{parts}")
-        else:
-            print(f"[que_ana] 第 {idx+1} 筆格式異常，跳過：{reply}")
-
-    _thinking(False)
+            parts = [p.strip().upper() for p in reply.split(',')]
+            # 使用集合比對，確保每個元素是有效的單一字母
+            if len(parts) == 8 and all(p in VALID_ANSWERS for p in parts):
+                all_answers.append(parts)
+                print(f"[va_que_ana] 第 {idx+1} 筆：{parts}")
+            else:
+                print(f"[va_que_ana] 第 {idx+1} 筆格式異常，跳過：{reply}")
+    finally:
+        _thinking(False)
 
     if not all_answers:
         send('（孿生學生作答失敗，請聯絡助教。）')
@@ -281,11 +298,10 @@ def main():
 
     save_answer_matrix(all_answers)
 
-    # ── 統計每題各選項人數，push 到前端 ──
-    import json
+    # 統計每題各選項人數，push 到前端
     stats = {}
     for q_idx in range(8):
-        key = f'Q{q_idx+1}'
+        key    = f'Q{q_idx+1}'
         counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
         for row in all_answers:
             ans = row[q_idx] if q_idx < len(row) else None
@@ -298,20 +314,24 @@ def main():
         'stats':      stats,
         'n_students': len(all_answers),
     }, ensure_ascii=False)
+
+    # __DATA__ 不寫入對話 log（由 main.html poll 處直接過濾）
     _post('/push', {
         'text':       f'__DATA__{push_data}',
         'username':   username,
         'session_id': session_id,
         'log_path':   '',
     })
-    print(f"[que_ana] 已 push 統計資料到前端")
+    print("[va_que_ana] 已 push 統計資料到前端")
 
     send(
         f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案，已儲存至 AnswerMatrix。',
         delay=1
     )
-    write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')
-    print("[que_ana.py] 執行完畢")
+
+    # ── 後端執行紀錄（不是對話訊息）──
+    write_log(f'[va_que_ana] 完成，共 {len(all_answers)} 筆答案')
+    print("[va_que_ana.py] 執行完畢")
 
 
 if __name__ == '__main__':
