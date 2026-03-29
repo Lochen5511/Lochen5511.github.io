@@ -405,21 +405,10 @@ def main():
             break
         # btn_email_edit：繼續迴圈，重新要求輸入
 
-    # 取得單元名稱（從 session DB 讀取，預設為「效度」）
-    try:
-        res_unit = requests.get(
-            'http://localhost:5000/get_session_info',
-            params={'session_id': session_id}, timeout=5
-        )
-        unit = res_unit.json().get('unit', '效度') or '效度'
-    except Exception:
-        unit = '效度'
-
     # 寄送 email
     success = _send_result_email(
         to_addr     = student_email,
         username    = username,
-        unit        = unit,
         correct     = correct_count,
         total       = total,
         avg_conf    = avg_conf,
@@ -441,7 +430,7 @@ def main():
     print(f"[validity.py 執行完畢] {summary}")
 
 
-def _send_result_email(to_addr, username, unit, correct, total, avg_conf, return_id):
+def _send_result_email(to_addr, username, correct, total, avg_conf, return_id):
     """寄送測試結果至學生信箱"""
     import smtplib
     from email.mime.text import MIMEText
@@ -461,7 +450,7 @@ def _send_result_email(to_addr, username, unit, correct, total, avg_conf, return
     subject = '孿生AI先導測試'
     body = (
         f'{username}你好，'
-        f'你在單元【{unit}】的八題中答對 {correct} 題，'
+        f'你在單元【效度】的八題中答對 {correct} 題，'
         f'平均信心為 {avg_conf:.1f} 分。\n\n'
         f'你下次的學習代碼為：{return_id}，'
         f'下次登入時，請於登入介面輸入此代碼進入第二階段。'

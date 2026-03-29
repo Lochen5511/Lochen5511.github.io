@@ -810,6 +810,8 @@
 
     const msg = chosen.join('，');
     appendMsg(msg, 'user');
+    removeTyping();
+    typingBubble = appendTyping();
     logMsg('user', msg);
 
     post('/button_click', {
@@ -830,6 +832,8 @@
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
     appendMsg(val, 'user');
+    removeTyping();
+    typingBubble = appendTyping();
     logMsg('user', val);
     post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
@@ -948,6 +952,8 @@
     const text = input.value.trim();
     if (!text) return;
     appendMsg(text, 'user');
+    removeTyping();
+    typingBubble = appendTyping();
     logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
