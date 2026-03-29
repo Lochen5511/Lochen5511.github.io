@@ -291,6 +291,25 @@ def update_unit():
     return jsonify({'success': True})
 
 
+# ── /get_session_info ───────────────────
+@app.route('/get_session_info', methods=['GET', 'OPTIONS'])
+def get_session_info():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    session_id = request.args.get('session_id', '')
+    record     = lookup_session(session_id)
+    if not record:
+        return jsonify({'success': False, 'error': '找不到 session'}), 404
+
+    return jsonify({
+        'success':   True,
+        'username':  record.get('username', ''),
+        'unit':      record.get('unit', ''),
+        'return_id': record.get('return_id', ''),
+    })
+
+
 # ── /push ───────────────────────────────
 @app.route('/push', methods=['POST', 'OPTIONS'])
 def push():

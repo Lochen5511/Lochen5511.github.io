@@ -122,7 +122,7 @@
     .msg.ai   .avatar { background: var(--surface2); color: var(--gold); }
     .msg.user .avatar { background: var(--user-bg);  color: var(--cream); }
     .avatar-name {
-      font-size: 15px; color: var(--muted);
+      font-size: 10px; color: var(--muted);
       letter-spacing: 0.08em; text-align: center;
       max-width: 48px; word-break: break-all; line-height: 1.3;
     }
@@ -135,7 +135,7 @@
 
     .bubble {
       padding: 12px 16px; border-radius: var(--radius);
-      font-size: 20px; font-weight: 300; line-height: 1.7;
+      font-size: 15px; font-weight: 300; line-height: 1.7;
       letter-spacing: 0.02em;
       word-break: break-word; white-space: pre-wrap; overflow-wrap: anywhere;
       width: fit-content; max-width: 100%;
@@ -213,9 +213,9 @@
     }
     .btn-bubble:active  { transform: scale(0.97); }
     .btn-bubble.used    { opacity: 0.35; cursor: default; pointer-events: none; }
-    .btn-bubble.small   { padding: 6px 14px;  font-size: 20px; }
-    .btn-bubble.medium  { padding: 10px 26px; font-size: 20px; }
-    .btn-bubble.large   { padding: 13px 38px; font-size: 20px; }
+    .btn-bubble.small   { padding: 6px 14px;  font-size: 12px; }
+    .btn-bubble.medium  { padding: 10px 26px; font-size: 14px; }
+    .btn-bubble.large   { padding: 13px 38px; font-size: 16px; }
     .btn-bubble.gold    { border-color: var(--gold);  color: var(--gold); }
     .btn-bubble.gold:hover  { background: rgba(201,168,76,0.14); color: var(--cream); }
     .btn-bubble.green   { border-color: #6abf69; color: #6abf69; }
@@ -842,6 +842,13 @@
       btn.classList.add('used');
     }
     btn.textContent = '✓ ' + label;
+
+    // 跳轉按鈕：直接跳轉，不送出訊息
+    if (buttonId === 'btn_goto_enter') {
+      window.location.href = 'enter.html';
+      return;
+    }
+
     appendMsg(label, 'user');
     removeTyping();
     typingBubble = appendTyping();

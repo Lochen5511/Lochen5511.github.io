@@ -371,7 +371,122 @@ def main():
     report = analyze(results, username, session_id, log_path)
     export(report, results, username, session_id, log_path)
 
+    # ── 收集 email 並寄送結果 ──
+    while True:
+        send(
+            '你已經完成先導測試，請輸入完整信箱，'
+            '我會請我的同事把代碼和結果寄送到你的信箱！',
+            delay=0.5
+        )
+
+        email_reply = wait_for_user()
+        if email_reply is None or email_reply == '__INTERRUPTED__':
+            print("[validity.py] 等待 email 時中斷")
+            return
+
+        student_email = email_reply.strip()
+
+        # 確認信箱
+        send(f'確定信箱無誤嗎？\n{student_email}', delay=0.3)
+        send_buttons(
+            labels     = ['正確無誤', '需要修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_email_ok', 'btn_email_edit']
+        )
+
+        confirm = wait_for_user()
+        if confirm is None or confirm == '__INTERRUPTED__':
+            print("[validity.py] 等待確認信箱時中斷")
+            return
+
+        if 'btn_email_ok' in confirm:
+            write_log(f'[EMAIL] 學生確認信箱：{student_email}')
+            break
+        # btn_email_edit：繼續迴圈，重新要求輸入
+
+    # 取得單元名稱（從 session DB 讀取，預設為「效度」）
+    try:
+        res_unit = requests.get(
+            'http://localhost:5000/get_session_info',
+            params={'session_id': session_id}, timeout=5
+        )
+        unit = res_unit.json().get('unit', '效度') or '效度'
+    except Exception:
+        unit = '效度'
+
+    # 寄送 email
+    success = _send_result_email(
+        to_addr     = student_email,
+        username    = username,
+        unit        = unit,
+        correct     = correct_count,
+        total       = total,
+        avg_conf    = avg_conf,
+        return_id   = return_id,
+    )
+
+    if success:
+        send('已寄出！請記得檢查你的信箱（包含垃圾郵件匣）。', delay=0.5)
+    else:
+        send('郵件寄送失敗，請手動記錄代碼後再關閉此介面。', delay=0.5)
+
+    # 發送「回到上一頁」按鈕，點擊後跳轉至 enter.html
+    send_buttons(
+        labels     = ['回到上一頁'],
+        colors     = ['gold'],
+        size       = 'medium',
+        button_ids = ['btn_goto_enter']
+    )
     print(f"[validity.py 執行完畢] {summary}")
+
+
+def _send_result_email(to_addr, username, unit, correct, total, avg_conf, return_id):
+    """寄送測試結果至學生信箱"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.header import Header
+    from dotenv import load_dotenv
+
+    load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+    TAMAIL   = os.getenv('TAMAIL')
+    MAILPASS = os.getenv('MAILPASS')
+
+    if not TAMAIL or not MAILPASS:
+        print("[email] 缺少 TAMAIL 或 MAILPASS 環境變數，無法寄信")
+        write_log('[EMAIL] 寄送失敗：缺少 TAMAIL 或 MAILPASS')
+        return
+
+    subject = '孿生AI先導測試'
+    body = (
+        f'{username}你好，'
+        f'你在單元【{unit}】的八題中答對 {correct} 題，'
+        f'平均信心為 {avg_conf:.1f} 分。\n\n'
+        f'你下次的學習代碼為：{return_id}，'
+        f'下次登入時，請於登入介面輸入此代碼進入第二階段。'
+    )
+
+    msg = MIMEMultipart()
+    msg['From']    = f'塔伯特 <{TAMAIL}>'
+    msg['To']      = to_addr
+    msg['Subject'] = Header(subject, 'utf-8').encode()
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    try:
+        smtp = smtplib.SMTP('smtp.gmail.com', 587)
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(TAMAIL, MAILPASS)
+        smtp.sendmail(TAMAIL, to_addr, msg.as_string())
+        smtp.quit()
+        print(f"[email] 已寄送至 {to_addr}")
+        write_log(f'[EMAIL] 寄送成功 → {to_addr}')
+        return True
+    except Exception as e:
+        print(f"[email 寄送失敗] {e}")
+        write_log(f'[EMAIL] 寄送失敗：{e}')
+        return False
 
 
 if __name__ == '__main__':
