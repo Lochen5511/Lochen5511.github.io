@@ -810,8 +810,6 @@
 
     const msg = chosen.join('，');
     appendMsg(msg, 'user');
-    removeTyping();
-    typingBubble = appendTyping();
     logMsg('user', msg);
 
     post('/button_click', {
@@ -832,8 +830,6 @@
     const btn = document.querySelector(`#ddwrap_${ddId} .dd-confirm`);
     if (btn) { btn.disabled = true; btn.textContent = '✓ 已選擇'; }
     appendMsg(val, 'user');
-    removeTyping();
-    typingBubble = appendTyping();
     logMsg('user', val);
     post('/button_click', { message: val, username: userName, session_id: sessionId });
   }
@@ -854,8 +850,6 @@
     }
 
     appendMsg(label, 'user');
-    removeTyping();
-    typingBubble = appendTyping();
     logMsg('user', `[按鈕:${buttonId}] ${label}`);
     post('/button_click', { message: `${buttonId}:${label}`, username: userName, session_id: sessionId });
   }
@@ -869,7 +863,13 @@
     } catch(e) { console.warn(`[post ${path}]`, e.message); }
   }
 
-  /* ── Log（統一寫入入口）── */
+  /* ── 用戶操作後短暫保護 typing bubble 不被 poll 移除 ── */
+  let userJustActed = false;
+
+  function markUserActed() {
+    userJustActed = true;
+    setTimeout(() => { userJustActed = false; }, 1500);
+  }
   /* 修改：加入時間戳記，並擴大涵蓋範圍至 __ALERT__ 與所有 AI 訊息 */
   function logMsg(role, message) {
     const now = new Date();
@@ -896,20 +896,15 @@
         if (data.message.startsWith('__ALERT__')) {
           const alertText = data.message.replace('__ALERT__', '');
           showModal(alertText);
-          /* 修改：__ALERT__ 也寫入 log */
           logMsg('ai', `[ALERT] ${alertText}`);
         } else if (data.message.startsWith('__DATA__')) {
-          /* 修改：__DATA__ 只渲染圖表，不寫入對話 log */
           appendMsg(data.message, 'ai');
         } else {
           appendMsg(data.message, 'ai');
-          /* 修改：所有 AI 訊息（含 __BUTTON__、__BUTTONS__、__DROPDOWN__、__CHECKBOX__）統一寫入 log */
           logMsg('ai', data.message);
         }
-      } else if (data.thinking && !typingBubble) {
-        typingBubble = appendTyping();
-      } else if (!data.thinking && typingBubble) {
-        removeTyping();
+      } else if (data.thinking) {
+        if (!typingBubble) typingBubble = appendTyping();
       }
 
       const locked = data.input_locked === true;
@@ -952,8 +947,6 @@
     const text = input.value.trim();
     if (!text) return;
     appendMsg(text, 'user');
-    removeTyping();
-    typingBubble = appendTyping();
     logMsg('user', text);
     input.value = '';
     input.style.height = 'auto';
