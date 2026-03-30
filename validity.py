@@ -89,6 +89,7 @@ def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
             data = res.json()
             if data.get('message'):
                 _lock(False)
+                _set_thinking(True)  # 立刻顯示思考動畫
                 return data['message']
         except: pass
 

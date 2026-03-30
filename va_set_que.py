@@ -111,6 +111,7 @@ def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
         msg  = data.get('message')
         if msg:
             _lock(False)
+            _thinking(True)  # 立刻顯示思考動畫
             print(f"[user] {msg[:60]}")
             return msg
 

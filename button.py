@@ -164,6 +164,7 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
         msg  = data.get('message')
         if msg:
             _lock(False)
+            _thinking(True)  # 立刻顯示思考動畫，直到下一個 send() 完成
             print(f"[user] {msg[:60]}")
             return msg
 
