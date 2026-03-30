@@ -905,6 +905,9 @@
         }
       } else if (data.thinking) {
         if (!typingBubble) typingBubble = appendTyping();
+      } else if (!data.thinking && typingBubble) {
+        // 只有後端明確表示不在思考時才移除
+        removeTyping();
       }
 
       const locked = data.input_locked === true;

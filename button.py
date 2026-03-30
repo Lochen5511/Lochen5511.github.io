@@ -153,20 +153,20 @@ def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = N
             _lock(False)
             return None
 
+        # 優先取用戶輸入，減少延遲
+        data = _get('/fetch_user_input', {'session_id': session_id})
+        msg  = data.get('message')
+        if msg:
+            _lock(False)
+            print(f"[user] {msg[:60]}")
+            return msg
+
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
             print(f"[wait_for_user] session={session_id} 被 ID 輸入中斷")
             _write_log('[中斷] 用戶輸入 ID，流程中斷')
             _lock(False)
             return '__INTERRUPTED__'
-
-        data = _get('/fetch_user_input', {'session_id': session_id})
-        msg  = data.get('message')
-        if msg:
-            _lock(False)
-            _thinking(True)  # 立刻顯示思考動畫，直到下一個 send() 完成
-            print(f"[user] {msg[:60]}")
-            return msg
 
         # 前 ONLINE_CHECK_DELAY 秒內不判斷離線，等待前端 poll 建立 last_seen
         if elapsed >= ONLINE_CHECK_DELAY:

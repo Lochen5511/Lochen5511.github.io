@@ -67,30 +67,22 @@ USER_TIMEOUT = 300
 def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
-        try:
-            res = requests.get('http://localhost:5000/check_interrupted',
-                               params={'session_id': session_id})
-            if res.json().get('interrupted', False):
-                write_log('[中斷] 用戶輸入 ID，流程中斷')
-                return '__INTERRUPTED__'
-        except: pass
-
-        try:
-            res = requests.get('http://localhost:5000/check_online',
-                               params={'session_id': session_id, 'timeout': timeout})
-            if not res.json().get('online', True):
-                write_log('用戶已離開系統')
-                return None
-        except: pass
-
+        # 優先取用戶輸入，減少延遲
         try:
             res = requests.get('http://localhost:5000/fetch_user_input',
                                params={'session_id': session_id})
             data = res.json()
             if data.get('message'):
                 _lock(False)
-                _set_thinking(True)  # 立刻顯示思考動畫
                 return data['message']
+        except: pass
+
+        try:
+            res = requests.get('http://localhost:5000/check_interrupted',
+                               params={'session_id': session_id})
+            if res.json().get('interrupted', False):
+                write_log('[中斷] 用戶輸入 ID，流程中斷')
+                return '__INTERRUPTED__'
         except: pass
 
         try:

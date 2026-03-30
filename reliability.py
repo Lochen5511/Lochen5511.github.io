@@ -78,6 +78,16 @@ def send_buttons(labels, delay=0, colors=None, sizes=None, size='medium', button
 def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
+        # 優先取用戶輸入，減少延遲
+        try:
+            res = requests.get(f'{BACKEND}/fetch_user_input',
+                               params={'session_id': session_id}, timeout=5)
+            data = res.json()
+            if data.get('message'):
+                _lock(False)
+                return data['message']
+        except: pass
+
         try:
             res = requests.get(f'{BACKEND}/check_interrupted',
                                params={'session_id': session_id}, timeout=5)
@@ -94,14 +104,6 @@ def wait_for_user(interval=0.1, timeout=USER_TIMEOUT):
                 return None
         except: pass
 
-        try:
-            res = requests.get(f'{BACKEND}/fetch_user_input',
-                               params={'session_id': session_id}, timeout=5)
-            data = res.json()
-            if data.get('message'):
-                _lock(False)
-                return data['message']
-        except: pass
         time.sleep(interval)
 
 def write_log(content):
@@ -125,6 +127,7 @@ def main():
     send_alert('很抱歉，此單元尚在開發中，請返回選擇其他選項。')
 
     time.sleep(0.5)
+    _set_thinking(False)  # 確保思考動畫不殘留
     send_buttons(
         labels     = ['效度', '信度'],
         colors     = ['gray', 'blue'],
