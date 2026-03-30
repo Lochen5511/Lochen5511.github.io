@@ -252,7 +252,7 @@ QUESTIONS = [
 # 出題流程
 # ──────────────────────────────────────────
 def ask_question(q, index, total):
-    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=0.3)
+    send(f'第 {index}/{total} 題\n\n{q["stem"]}', delay=0.5)
     send_buttons(
         labels     = [f'{k}. {v}' for k, v in q['options'].items()],
         colors     = ['gold', 'gold', 'gold', 'gold'],
@@ -325,7 +325,6 @@ def main():
             return
 
         results.append(result)
-        time.sleep(0.5)
 
     correct_count = sum(1 for r in results if r['is_correct'])
     avg_conf      = sum(r['confidence'] for r in results) / total
