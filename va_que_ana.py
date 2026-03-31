@@ -192,8 +192,10 @@ def row_to_prompt(row: dict, questions: list) -> str:
 
 def save_answer_matrix(answers: list):
     import csv
-    out_path = os.path.join(LOG_DIR, f"{username}_AnswerMatrix.csv")
-    header   = [f'Q{i+1}' for i in range(8)]
+    # 放入與 log 檔相同的 session 資料夾
+    session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
+    out_path    = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+    header      = [f'Q{i+1}' for i in range(8)]
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -307,8 +309,12 @@ def main():
     })
     print(f"[que_ana] 已 push 統計資料到前端")
 
+    session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
+    matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+
     send(
-        f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案，已儲存至 AnswerMatrix。',
+        f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案。\n'
+        f'__LINK__{matrix_path}||AnswerMatrix.csv',
         delay=1
     )
     write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')

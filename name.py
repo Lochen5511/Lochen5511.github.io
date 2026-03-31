@@ -147,8 +147,10 @@ def enter():
         return jsonify({'success': False, 'error': '名字不能為空'}), 400
 
     os.makedirs(LOG_DIR, exist_ok=True)
-    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    session_id  = datetime.now().strftime('%Y%m%d_%H%M%S')
+    session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
+    os.makedirs(session_dir, exist_ok=True)
+    log_path    = os.path.join(session_dir, f"{username}_{session_id}.txt")
 
     open(log_path, 'a', encoding='utf-8').close()
 
@@ -203,7 +205,9 @@ def greeting_set_que():
     if record:
         log_path = record.get('log_path', '')
     else:
-        log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
+        os.makedirs(session_dir, exist_ok=True)
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
@@ -229,7 +233,14 @@ def greeting():
     data       = request.get_json() or {}
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
-    log_path   = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+
+    record   = lookup_session(session_id)
+    if record:
+        log_path = record.get('log_path', '')
+    else:
+        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
+        os.makedirs(session_dir, exist_ok=True)
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
@@ -289,6 +300,31 @@ def update_unit():
 
     update_session_unit(session_id, unit)
     return jsonify({'success': True})
+
+
+# ── /download ───────────────────────────
+@app.route('/download', methods=['GET', 'OPTIONS'])
+def download_file():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    from flask import send_file
+    file_path = request.args.get('path', '')
+
+    if not file_path:
+        return jsonify({'error': '未指定檔案路徑'}), 400
+
+    # 安全性：只允許下載 LOG_DIR 內的檔案
+    abs_path = os.path.abspath(file_path)
+    abs_log  = os.path.abspath(LOG_DIR)
+    if not abs_path.startswith(abs_log):
+        return jsonify({'error': '存取被拒絕'}), 403
+
+    if not os.path.exists(abs_path):
+        return jsonify({'error': '檔案不存在'}), 404
+
+    return send_file(abs_path, as_attachment=True,
+                     download_name=os.path.basename(abs_path))
 
 
 # ── /get_session_info ───────────────────
@@ -471,6 +507,13 @@ def log_message():
         return jsonify({'success': False}), 400
 
     log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
+    record   = lookup_session(session_id)
+    if record and record.get('log_path'):
+        log_path = record['log_path']
+    else:
+        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
+        os.makedirs(session_dir, exist_ok=True)
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
     label    = '用戶' if role == 'user' else 'AI'
 
     # 修改：若前端有傳入時間戳記則使用，否則由後端產生

@@ -421,7 +421,15 @@
       font-size: 13px; letter-spacing: 0.15em; color: var(--muted);
     }
 
-    /* ── Animations ── */
+    .msg-link {
+      color: #6aaabf;
+      text-decoration: underline;
+      cursor: pointer;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 15px; font-weight: 300;
+      background: none; border: none; padding: 0;
+    }
+    .msg-link:hover { color: #c7e8f5; }
     @keyframes msgIn  { to { opacity: 1; transform: translateY(0); } }
     @keyframes bounce {
       0%,60%,100% { transform: translateY(0); }
@@ -556,6 +564,21 @@
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             .replace(/\n/g,'<br>');
+  }
+
+  /* 渲染訊息文字，將 __LINK__{path}||{label} 轉為可點擊下載連結 */
+  function renderText(text) {
+    const parts = text.split(/(__LINK__[^\n]*)/g);
+    return parts.map(part => {
+      if (part.startsWith('__LINK__')) {
+        const raw   = part.replace('__LINK__', '');
+        const [filePath, label] = raw.split('||');
+        const encodedPath = encodeURIComponent(filePath || '');
+        const displayLabel = escHtml(label || 'AnswerMatrix.csv');
+        return `<a class="msg-link" href="${BACKEND}/download?path=${encodedPath}" download="${displayLabel}">${displayLabel}</a>`;
+      }
+      return escHtml(part);
+    }).join('');
   }
   function scrollBottom() { msgList.scrollTo({ top: msgList.scrollHeight, behavior: 'smooth' }); }
   function removeEmpty()  { if (emptyEl.parentNode) emptyEl.remove(); }
@@ -728,7 +751,7 @@
         ${escHtml(lbl||'')}
       </button>`;
     } else {
-      content = `<div class="bubble">${escHtml(text)}</div>`;
+      content = `<div class="bubble">${renderText(text)}</div>`;
     }
 
     const div = document.createElement('div');
