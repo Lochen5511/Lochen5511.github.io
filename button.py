@@ -132,7 +132,7 @@ def send_buttons(labels: list, delay: float = 0,
 # ──────────────────────────────────────────
 # wait_for_user：等待用戶回應
 # ──────────────────────────────────────────
-def wait_for_user(interval: float = 0.1, timeout: int = 300, wait_limit: int = None) -> str | None:
+def wait_for_user(interval: float = 0.5, timeout: int = 300, wait_limit: int = None) -> str | None:
     """
     等待用戶回應。
     timeout   : 無 /poll 超過此秒數視為離線，回傳 None
