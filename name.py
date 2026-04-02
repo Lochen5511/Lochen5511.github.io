@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from collections import defaultdict
-import os, subprocess, threading, json, time
+import os, subprocess, threading, json, time, uuid
 from datetime import datetime
 
 # ──────────────────────────────────────────
@@ -147,7 +147,7 @@ def enter():
         return jsonify({'success': False, 'error': '名字不能為空'}), 400
 
     os.makedirs(LOG_DIR, exist_ok=True)
-    session_id  = datetime.now().strftime('%Y%m%d_%H%M%S')
+    session_id  = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
     session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
     os.makedirs(session_dir, exist_ok=True)
     log_path    = os.path.join(session_dir, f"{username}_{session_id}.txt")
@@ -179,7 +179,7 @@ def enter_id():
     username = record['username']
     log_path = record['log_path']
 
-    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
 
     write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
     print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")

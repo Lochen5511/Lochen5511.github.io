@@ -4,8 +4,8 @@ final_va.py
 在 validity_analyze.analyze() 完成後呼叫。
 輸入：analyze() 回傳的 report dict。
 輸出：
-  1. {username}_{session_id}_profile.json   （個人 JSON profile）
-  2. validity_wide_table.csv                （wide table，每次執行追加一列）
+  1. {username}_{session_id}_profile.json   （個人 JSON profile，存於 session 資料夾）
+  2. validity_wide_table.csv                （wide table，存於 LOG_DIR 根目錄，全用戶共用）
 
 使用方式（在 validity.py 末端）：
     from validity_analyze import analyze
@@ -50,8 +50,12 @@ VERSION       = 'validity_branch_v1.1'
 ALL_CODES     = ['V1a', 'V1b', 'V1c', 'V2a', 'V2b', 'X1', 'V3a', 'V3b']
 V2_ITEMS      = {'V2_1', 'V2_2'}
 
+# wide_table 固定存於此路徑，全用戶共用
+LOG_DIR    = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+WIDE_TABLE = os.path.join(LOG_DIR, 'validity_wide_table.csv')
+
 WIDE_TABLE_HEADER = [
-    'student_id', 'admin_session_id',
+    'admin_session_id',
     'accuracy', 'avg_confidence', 'low_conf_ratio', 'high_conf_wrong_ratio',
     'V1a', 'V1b', 'V1c', 'V2a', 'V2b', 'X1', 'V3a', 'V3b',
 ]
@@ -128,11 +132,11 @@ def export(
     results   : validity.py 每題回傳的 dict list
     username  : 用戶名稱
     session_id: 登入時間戳
-    log_path  : log 檔路徑（用於取得輸出資料夾）
+    log_path  : log 檔路徑（用於取得 session 資料夾）
     """
 
-    # 輸出資料夾與 log 同一層
-    out_dir = os.path.dirname(log_path) if log_path else '.'
+    # ── JSON profile 存於 session 資料夾（與 log 同層）──
+    out_dir = os.path.dirname(log_path) if log_path else LOG_DIR
     os.makedirs(out_dir, exist_ok=True)
 
     strength   = report.get('strength', {})
@@ -142,7 +146,7 @@ def export(
     metrics    = _build_metrics(results)
     evidence   = _build_evidence(results, v2_meta)
 
-    # ── 1. JSON profile ──
+    # ── 1. JSON profile（session 資料夾）──
     profile = {
         'version':          VERSION,
         'student_id':       username,
@@ -179,15 +183,14 @@ def export(
         json.dump(profile, f, ensure_ascii=False, indent=2)
     print(f"[final_va] JSON profile 已儲存：{json_path}")
 
-    # ── 2. Wide table CSV（追加模式 + 跨進程鎖）──
-    csv_path  = os.path.join(out_dir, 'validity_wide_table.csv')
-    lock_path = csv_path + '.lock'
+    # ── 2. Wide table CSV（LOG_DIR 根目錄，全用戶共用，追加模式 + 跨進程鎖）──
+    os.makedirs(LOG_DIR, exist_ok=True)
+    lock_path = WIDE_TABLE + '.lock'
 
     acquired = _acquire_lock(lock_path)
     try:
-        write_header = not os.path.exists(csv_path)
+        write_header = not os.path.exists(WIDE_TABLE)
         row = {
-            'student_id':            username,
             'admin_session_id':      session_id,
             'accuracy':              metrics.get('accuracy', ''),
             'avg_confidence':        metrics.get('avg_confidence', ''),
@@ -197,12 +200,12 @@ def export(
         for code in ALL_CODES:
             row[code] = round(strength.get(code, 0.0), 3)
 
-        with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+        with open(WIDE_TABLE, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=WIDE_TABLE_HEADER)
             if write_header:
                 writer.writeheader()
             writer.writerow(row)
-        print(f"[final_va] Wide table 已追加：{csv_path}")
+        print(f"[final_va] Wide table 已追加：{WIDE_TABLE}")
     finally:
         if acquired:
             _release_lock(lock_path)
