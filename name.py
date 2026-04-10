@@ -605,6 +605,92 @@ def log_message():
     return jsonify({'success': True})
 
 
+# ── /test_skip ──────────────────────────
+@app.route('/test_skip', methods=['POST', 'OPTIONS'])
+def test_skip():
+    """
+    測試跳轉：讀取 test_data.txt，將題目以 [命題N完成] 格式寫入 log，
+    然後直接啟動 va_que_ana.py，模擬 va_set_que 完成的狀態。
+    """
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+
+    record   = lookup_session(session_id)
+    log_path = record.get('log_path', '') if record else \
+               os.path.join(LOG_DIR, f"{username}_{session_id}", f"{username}_{session_id}.txt")
+
+    # 讀取 test_data.txt
+    test_data_path = os.path.join(LOG_DIR, 'test_data.txt')
+    if not os.path.exists(test_data_path):
+        # 嘗試從 BASE_DIR 找
+        test_data_path = os.path.join(BASE_DIR, 'test_data.txt')
+    if not os.path.exists(test_data_path):
+        return jsonify({'success': False, 'error': f'找不到 test_data.txt'}), 404
+
+    # 解析題目
+    try:
+        with open(test_data_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        import re
+        questions = []
+        # 以空行分隔每題
+        blocks = re.split(r'\n\s*\n', content.strip())
+        for block in blocks:
+            lines = [l.strip() for l in block.strip().splitlines() if l.strip()]
+            if len(lines) < 5:
+                continue
+            stem = re.sub(r'^\d+\.\s*', '', lines[0])
+            opts = {}
+            for line in lines[1:]:
+                m = re.match(r'^([A-D])\.\s*(.+)', line)
+                if m:
+                    opts[m.group(1)] = m.group(2)
+            if len(opts) == 4:
+                questions.append({'stem': stem, 'options': opts})
+
+        if len(questions) < 8:
+            return jsonify({'success': False, 'error': f'題目不足 8 題，只解析到 {len(questions)} 題'}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'解析失敗：{e}'}), 500
+
+    # 將題目以 [命題N完成] 格式寫入 log（供 va_que_ana 的 parse_questions_from_log 使用）
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f'[{ts}] [測試跳轉] 使用 test_data.txt 模擬 va_set_que 完成\n')
+            for i, q in enumerate(questions[:8], start=1):
+                opts = q['options']
+                f.write(
+                    f'[{ts}] [命題{i}完成] stem={q["stem"]} | '
+                    f'A={opts.get("A","")} | B={opts.get("B","")} | '
+                    f'C={opts.get("C","")} | D={opts.get("D","")}\n'
+                )
+        print(f"[test_skip] 已寫入 {len(questions[:8])} 題至 log")
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'log 寫入失敗：{e}'}), 500
+
+    # 啟動 va_que_ana.py
+    if session_id and session_id not in launched_sessions:
+        launched_sessions.add(session_id)
+        threading.Thread(
+            target=launch_script,
+            args=('va_que_ana.py', username, session_id, log_path),
+            daemon=True
+        ).start()
+        print(f"[test_skip] 已啟動 va_que_ana.py session={session_id}")
+    else:
+        print(f"[test_skip] session={session_id} 已啟動，跳過")
+
+    return jsonify({'success': True})
+
+
 # ──────────────────────────────────────────
 # 啟動
 # ──────────────────────────────────────────
