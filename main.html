@@ -1156,59 +1156,6 @@
   async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
-
-    // ── 測試跳轉代碼 ──
-    if (text === 'test_code_of_skip') {
-      input.value = '';
-      input.style.height = 'auto';
-      charCount.textContent = '0 / 2000';
-      sendBtn.classList.remove('active');
-      appendMsg('test_code_of_skip', 'user');
-      logMsg('user', 'test_code_of_skip');
-
-      // 要求輸入學名
-      appendMsg('請輸入學名以驗證身份：', 'ai');
-      logMsg('ai', '請輸入學名以驗證身份：');
-
-      // 等待下一則輸入作為學名驗證
-      window._awaitingTestAuth = true;
-      return;
-    }
-
-    // ── 測試學名驗證 ──
-    if (window._awaitingTestAuth) {
-      window._awaitingTestAuth = false;
-      input.value = '';
-      input.style.height = 'auto';
-      charCount.textContent = '0 / 2000';
-      sendBtn.classList.remove('active');
-      appendMsg(text, 'user');
-      logMsg('user', text);
-
-      if (text === 'Tempus_Aeternum') {
-        appendMsg('驗證成功，正在載入測試資料…', 'ai');
-        logMsg('ai', '驗證成功，正在載入測試資料…');
-        try {
-          const res = await fetch(`${BACKEND}/test_skip`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: userName, session_id: sessionId }),
-          });
-          const data = await res.json();
-          if (!data.success) {
-            appendMsg(`測試跳轉失敗：${data.error || '未知錯誤'}`, 'ai');
-          }
-        } catch (e) {
-          appendMsg('連線失敗，請稍後再試。', 'ai');
-          console.warn('[test_skip]', e.message);
-        }
-      } else {
-        appendMsg('學名錯誤，驗證失敗。', 'ai');
-        logMsg('ai', '學名錯誤，驗證失敗。');
-      }
-      return;
-    }
-
     appendMsg(text, 'user');
     logMsg('user', text);
     input.value = '';
