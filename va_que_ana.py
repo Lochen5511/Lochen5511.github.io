@@ -159,8 +159,30 @@ V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效
 """
 
 
+def _acquire_lock(lock_path: str, timeout: float = 10.0) -> bool:
+    """等待 .lock 檔釋放後取得鎖"""
+    import time as _time
+    start = _time.time()
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return True
+        except FileExistsError:
+            if _time.time() - start > timeout:
+                print(f"[wide_table] 鎖定逾時，強制繼續讀取")
+                return False
+            _time.sleep(0.05)
+
+def _release_lock(lock_path: str):
+    try:
+        os.remove(lock_path)
+    except: pass
+
 def load_wide_table() -> list:
     import csv
+    lock_path = WIDE_TABLE + '.lock'
+    acquired  = _acquire_lock(lock_path)
     rows = []
     try:
         with open(WIDE_TABLE, 'r', encoding='utf-8') as f:
@@ -170,6 +192,9 @@ def load_wide_table() -> list:
         print(f"[wide_table] 讀取 {len(rows)} 筆")
     except Exception as e:
         print(f"[wide_table 讀取失敗] {e}")
+    finally:
+        if acquired:
+            _release_lock(lock_path)
     return rows
 
 
@@ -190,22 +215,32 @@ def row_to_prompt(row: dict, questions: list) -> str:
     return f"學生數值：\n{stats}\n\n題目：\n{ques}"
 
 
-def save_answer_matrix(answers: list):
+def save_answer_matrix(answers: list, questions: list):
     import csv
-    # 放入與 log 檔相同的 session 資料夾
     session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
     out_path    = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
-    header      = [f'Q{i+1}' for i in range(8)]
+
+    # 從題庫取得正確答案（A 永遠是正確答案，見 validity.py 的 ask_question）
+    correct_answers = ['A'] * 8
+
+    header = [f'Q{i+1}' for i in range(8)] + ['總分']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
+            # 第一列：欄位標題
             writer.writerow(header)
-            for row in answers:
-                writer.writerow(row)
+            # 第二列：正確答案
+            writer.writerow(correct_answers + ['正確答案'])
+            # 每個學生的作答與得分
+            for i, row in enumerate(answers):
+                score = sum(1 for q_idx, ans in enumerate(row)
+                            if q_idx < 8 and ans == correct_answers[q_idx])
+                writer.writerow(row + [score])
         print(f"[AnswerMatrix] 已儲存：{out_path}（{len(answers)} 筆）")
         write_log(f'[que_ana] AnswerMatrix 已儲存：{out_path}')
     except Exception as e:
         print(f"[AnswerMatrix 儲存失敗] {e}")
+    return out_path
 
 
 def parse_questions_from_log() -> list:
@@ -283,12 +318,13 @@ def main():
         send('（孿生學生作答失敗，請聯絡助教。）')
         return
 
-    save_answer_matrix(all_answers)
+    save_answer_matrix(all_answers, questions)
 
     import json
+    correct_answers = ['A'] * 8
     stats = {}
     for q_idx in range(8):
-        key = f'Q{q_idx+1}'
+        key    = f'Q{q_idx+1}'
         counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
         for row in all_answers:
             ans = row[q_idx] if q_idx < len(row) else None
@@ -296,10 +332,19 @@ def main():
                 counts[ans] += 1
         stats[key] = counts
 
+    # 計算每個學生的成績
+    students = []
+    for i, row in enumerate(all_answers):
+        score = sum(1 for q_idx, ans in enumerate(row)
+                    if q_idx < 8 and ans == correct_answers[q_idx])
+        students.append({'id': i + 1, 'answers': row, 'score': score})
+
     push_data = json.dumps({
         'type':       'answer_matrix',
         'stats':      stats,
         'n_students': len(all_answers),
+        'students':   students,
+        'correct':    correct_answers,
     }, ensure_ascii=False)
     _post('/push', {
         'text':       f'__DATA__{push_data}',
@@ -319,6 +364,15 @@ def main():
     )
     write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')
     print("[que_ana.py] 執行完畢")
+
+    import sys
+    import subprocess
+    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
+    subprocess.Popen(
+        [sys.executable, 'va_pd.py'] + base_args,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+    print("[que_ana.py] 已啟動 va_pd.py")
 
 
 if __name__ == '__main__':

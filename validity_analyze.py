@@ -82,25 +82,29 @@ def _step_b(results: list, strength: dict) -> tuple:
     c2   = v2['V2_2']['confidence']
 
     if ans1 == 'B' and ans2 == 'A':
+        # V2a：顛倒型（同時↔預測互換）
         strength['V2a'] = max(strength['V2a'], V2A_SWAP_STRENGTH)
         if c1 >= HIGH_CONF_THRESHOLD or c2 >= HIGH_CONF_THRESHOLD:
             v2_meta['V2a_severity'] = 'high'
         return strength, v2_meta
 
-    if (ans1 == 'B' and ans2 == 'B') or (ans1 == 'A' and ans2 == 'A'):
+    if ans1 == 'A' and ans2 == 'A':
+        # V2b：固著同時效度（兩題都選同時效度，V2_2 答錯）
         strength['V2b'] = max(strength['V2b'], V2B_ALWAYS_TYPE_STRENGTH)
-        wrong_conf = []
-        if ans1 != 'A':
-            wrong_conf.append(c1)
-        if ans2 != 'B':
-            wrong_conf.append(c2)
-        if any(c >= HIGH_CONF_THRESHOLD for c in wrong_conf):
+        if c2 >= HIGH_CONF_THRESHOLD:  # 只有 V2_2 答錯，看 c2
             v2_meta['V2b_severity'] = 'high'
         return strength, v2_meta
 
-    if ans1 == 'A' and ans2 == 'B':
+    if ans1 == 'B' and ans2 == 'B':
+        # V2_1 答錯（選預測）、V2_2 答對（預測效度正確答案是 B）
+        # 只有單題錯，不算固著型，走一般 step_a 計分
         return strength, v2_meta
 
+    if ans1 == 'A' and ans2 == 'B':
+        # 全對，不標
+        return strength, v2_meta
+
+    # 其他組合（含 C、D 選項）：偶發錯誤
     v2_meta['V2_uncertain'] = True
     return strength, v2_meta
 
@@ -181,6 +185,18 @@ def analyze(results: list, username: str, session_id: str, log_path: str) -> dic
 
     strength          = _step_a(results, strength)
     strength, v2_meta = _step_b(results, strength)
+
+    # Step C：ans1=B, ans2=B 時，V2_1 單題答錯補計分（V2a 迷思，選了預測效度）
+    v2 = {r['item_id']: r for r in results if r['item_id'] in V2_ITEMS}
+    if 'V2_1' in v2 and 'V2_2' in v2:
+        ans1 = v2['V2_1']['answer']
+        ans2 = v2['V2_2']['answer']
+        if ans1 == 'B' and ans2 == 'B':
+            # V2_1 答錯（應選 A 同時效度，選了 B 預測效度）
+            add = POINT_SUPPORT_WRONG
+            if v2['V2_1']['confidence'] >= HIGH_CONF_THRESHOLD:
+                add += POINT_HIGH_CONF_BONUS
+            strength['V2a'] = min(MAX_STRENGTH, strength['V2a'] + add)
     lci_data          = _calc_lci(results)
     interview         = _interview_candidates(strength, results, v2_meta)
 

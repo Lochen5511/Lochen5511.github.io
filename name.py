@@ -39,6 +39,27 @@ USER_TIMEOUT = 300
 # ──────────────────────────────────────────
 # Session 庫（本地 JSON）
 # ──────────────────────────────────────────
+DB_LOCK      = threading.Lock()
+DB_LOCK_FILE = DB_PATH + '.lock'
+
+def _acquire_db_lock(timeout: float = 10.0) -> bool:
+    start = time.time()
+    while True:
+        try:
+            fd = os.open(DB_LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return True
+        except FileExistsError:
+            if time.time() - start > timeout:
+                print(f"[db] 鎖定逾時，強制繼續")
+                return False
+            time.sleep(0.05)
+
+def _release_db_lock():
+    try:
+        os.remove(DB_LOCK_FILE)
+    except: pass
+
 def load_db() -> dict:
     try:
         if os.path.exists(DB_PATH):
@@ -56,41 +77,61 @@ def save_db(db: dict):
     except Exception as e:
         print(f"[db 寫入失敗] {e}")
 
+def _db_update(update_fn):
+    """
+    安全的 DB 更新：取得跨進程鎖 → 讀取 → 修改 → 寫入 → 釋放鎖。
+    update_fn(db) 直接修改 db dict，不需回傳值。
+    """
+    with DB_LOCK:  # 執行緒鎖
+        acquired = _acquire_db_lock()  # 跨進程鎖
+        try:
+            db = load_db()
+            update_fn(db)
+            save_db(db)
+        finally:
+            if acquired:
+                _release_db_lock()
+
 def register_session(username: str, session_id: str, log_path: str):
-    db = load_db()
-    db[session_id] = {
-        'username':  username,
-        'log_path':  log_path,
-        'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'unit':      None,
-        'return_id': None,
-    }
-    save_db(db)
+    def _update(db):
+        db[session_id] = {
+            'username':  username,
+            'log_path':  log_path,
+            'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'unit':      None,
+            'return_id': None,
+        }
+    _db_update(_update)
     print(f"[db] 登記 session={session_id} user={username}")
 
 def update_session_unit(session_id: str, unit: str):
-    db = load_db()
-    if session_id in db:
-        db[session_id]['unit'] = unit
-        save_db(db)
-        print(f"[db] 更新 session={session_id} unit={unit}")
+    def _update(db):
+        if session_id in db:
+            db[session_id]['unit'] = unit
+    _db_update(_update)
+    print(f"[db] 更新 session={session_id} unit={unit}")
 
 def generate_return_id(session_id: str) -> str:
     import random, string
-    db = load_db()
-    existing = {v.get('return_id') for v in db.values() if isinstance(v, dict) and v.get('return_id')}
-    while True:
-        rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        if rid not in existing:
-            break
-    if session_id in db:
-        db[session_id]['return_id'] = rid
-    if '__return_index__' not in db:
-        db['__return_index__'] = {}
-    db['__return_index__'][rid] = session_id
-    save_db(db)
-    print(f"[db] 產生 return_id={rid} for session={session_id}")
-    return rid
+    result = {'rid': ''}
+
+    def _update(db):
+        existing = {v.get('return_id') for v in db.values()
+                    if isinstance(v, dict) and v.get('return_id')}
+        while True:
+            rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            if rid not in existing:
+                break
+        if session_id in db:
+            db[session_id]['return_id'] = rid
+        if '__return_index__' not in db:
+            db['__return_index__'] = {}
+        db['__return_index__'][rid] = session_id
+        result['rid'] = rid
+
+    _db_update(_update)
+    print(f"[db] 產生 return_id={result['rid']} for session={session_id}")
+    return result['rid']
 
 def lookup_return_id(return_id: str) -> dict | None:
     db = load_db()
