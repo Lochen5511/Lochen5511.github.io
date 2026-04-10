@@ -186,7 +186,6 @@
       background: var(--gold); opacity: 0.45;
     }
 
-    /* 修復 #6：移除重複的 .divider 定義，保留單一合併版本 */
     .divider {
       display: flex; align-items: center; gap: 12px;
       margin: 20px 0 16px;
@@ -229,7 +228,7 @@
       <div class="underline"></div>
     </div>
 
-    <button class="btn" id="enterBtn" onclick="handleEnter()">進&ensp;入</button>
+    <button class="btn" id="enterBtn">進&ensp;入</button>
 
     <div class="divider">
       <span>或</span>
@@ -242,7 +241,7 @@
       <div class="underline"></div>
     </div>
 
-    <button class="btn" id="idBtn" onclick="handleId()">以&ensp;ID&ensp;進入</button>
+    <button class="btn" id="idBtn">以&ensp;ID&ensp;進入</button>
 
     <p class="status" id="status">請輸入您的名字才能繼續</p>
     <p class="footer">此系統僅供授權使用者存取</p>
@@ -257,9 +256,8 @@
 
 <script>
   let BACKEND = 'https://your-tunnel.trycloudflare.com';
-  let configLoaded = false; // 修復 #3：追蹤是否已載入
+  let configLoaded = false;
 
-  // 修復 #3：只在頁面初始化時載入一次 config
   async function loadConfig() {
     if (configLoaded) return;
     try {
@@ -276,7 +274,6 @@
     }
   }
 
-  // 頁面載入時立即執行一次
   loadConfig();
 
   const nameInput = document.getElementById('nameInput');
@@ -288,15 +285,15 @@
   nameInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') handleEnter();
   });
-
-  // 修復 #4：移除重複的 keydown 綁定，只保留這一個
   idInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') handleId();
   });
-
   idInput.addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase();
   });
+
+  enterBtn.addEventListener('click', handleEnter);
+  idBtn.addEventListener('click', handleId);
 
   function showStatus(msg, isInfo = false) {
     statusEl.textContent = msg;
@@ -314,50 +311,35 @@
     enterBtn.disabled = true;
     showStatus('連線中…', true);
 
-    // 修復 #3：不再重複呼叫 loadConfig()，config 已在頁面載入時取得
-    console.log('[enter] BACKEND:', BACKEND);
+    await loadConfig();
 
     let sessionId = '';
 
     try {
-      console.log('[enter] 嘗試連線後端...');
       const res = await fetch(`${BACKEND}/enter`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: name }),
       });
-
-      console.log('[enter] 回應狀態:', res.status, res.headers.get('content-type'));
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        throw new Error('非 JSON 回應：' + contentType);
-      }
-
       const data = await res.json();
-      console.log('[enter] 回應資料:', data);
-
-      if (data.session_id) {
-        sessionId = data.session_id;
-        console.log('[enter] session_id:', sessionId);
-      } else {
-        throw new Error('無 session_id');
-      }
-
+      if (!data.session_id) throw new Error('無 session_id');
+      sessionId = data.session_id;
     } catch (e) {
       console.warn('[enter 失敗]', e.message);
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      sessionId = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      showStatus('連線失敗，請稍後再試。');
+      enterBtn.disabled = false;
+      return;
     }
 
-    window.location.href =
-      `main.html?username=${encodeURIComponent(name)}&session_id=${encodeURIComponent(sessionId)}`;
-  }
+    // ── 管理員模式：名字為 Tempus_Aeternum 時走 /greeting_admin ──
+    const isAdmin = (name === 'Tempus_Aeternum');
+    const mode    = isAdmin ? 'admin' : '';
 
-  // 修復 #4：已移除此處原本重複的 idInput keydown 監聽器
+    window.location.href =
+      `main.html?username=${encodeURIComponent(name)}&session_id=${encodeURIComponent(sessionId)}` +
+      (isAdmin ? '&mode=admin' : '');
+  }
 
   async function handleId() {
     const id = document.getElementById('idInput').value.trim().toUpperCase();
@@ -373,14 +355,14 @@
     document.getElementById('idBtn').disabled = true;
     showStatus('驗證中…', true);
 
-    // 修復 #3：不再重複呼叫 loadConfig()
+    await loadConfig();
+
     try {
       const res = await fetch(`${BACKEND}/enter_id`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ return_id: id }),
       });
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
