@@ -3,15 +3,15 @@ import time
 import requests
 import os
 import csv
+import openai
 from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # ──────────────────────────────────────────
 # 環境變數 & OpenAI
 # ──────────────────────────────────────────
 load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
-openai_client = OpenAI(api_key=os.getenv("AIKEY"))
+openai.api_key = os.getenv("AIKEY")
 
 # ──────────────────────────────────────────
 # 接收變數
@@ -130,7 +130,7 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
 # ──────────────────────────────────────────
 # 讀取 AnswerMatrix
 # ──────────────────────────────────────────
-def load_answer_matrix() -> list[list[str]]:
+def load_answer_matrix() -> list:
     """
     讀取 AnswerMatrix.csv，回傳每個學生的作答列表（不含標題列和正確答案列）。
     """
@@ -164,7 +164,7 @@ def load_answer_matrix() -> list[list[str]]:
 # ──────────────────────────────────────────
 # 計算難度與鑑別度
 # ──────────────────────────────────────────
-def calc_pd(answers: list[list[str]]) -> dict:
+def calc_pd(answers: list) -> dict:
     """
     計算每題的難度（P）與鑑別度（D）。
     正確答案固定為 A（每題的 A 選項為正確答案）。
@@ -238,7 +238,7 @@ def ask_ai_interpretation(pd_result: dict) -> str:
     user_prompt = '\n'.join(lines)
 
     try:
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model='gpt-4o',
             temperature=0.5,
             messages=[
@@ -246,7 +246,7 @@ def ask_ai_interpretation(pd_result: dict) -> str:
                 {'role': 'user',   'content': user_prompt},
             ]
         )
-        return response.choices[0].message.content.strip()
+        return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         print(f"[va_pd] OpenAI 失敗：{e}")
         return None
