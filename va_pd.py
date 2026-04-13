@@ -3,6 +3,7 @@ import time
 import requests
 import os
 import csv
+import random
 import openai
 from datetime import datetime
 from dotenv import load_dotenv
@@ -33,6 +34,7 @@ USER_TIMEOUT = 300
 N_TOTAL      = 30   # 模擬學生總數
 N_GROUP      = 8    # 高低分組人數
 N_QUESTIONS  = 8    # 題目數
+CORRECT_ANS  = 'A'  # 每題正確答案固定為 A
 
 
 # ──────────────────────────────────────────
@@ -80,7 +82,7 @@ def send(text, delay=0):
         'text': text, 'username': username,
         'session_id': session_id, 'log_path': log_path,
     })
-    print(f"[send] {text[:50]}")
+    print(f"[send] {text[:80]}")
 
 def send_buttons(labels, delay=0, colors=None, size='medium',
                  sizes=None, button_ids=None):
@@ -152,7 +154,6 @@ def load_answer_matrix() -> list:
         # 第三列起：學生作答
         for row in rows[2:]:
             if len(row) >= N_QUESTIONS:
-                # 只取前 N_QUESTIONS 欄（排除總分欄）
                 answers.append(row[:N_QUESTIONS])
     except Exception as e:
         print(f"[va_pd] AnswerMatrix 讀取失敗：{e}")
@@ -167,7 +168,6 @@ def load_answer_matrix() -> list:
 def calc_pd(answers: list) -> dict:
     """
     計算每題的難度（P）與鑑別度（D）。
-    正確答案固定為 A（每題的 A 選項為正確答案）。
     回傳格式：{
         'Q1': {'p': 0.8, 'd': 0.5, 'correct': 24},
         ...
@@ -177,16 +177,12 @@ def calc_pd(answers: list) -> dict:
     if n == 0:
         return {}
 
-    correct_ans = 'A'
-
-    # 計算每個學生的總分
     scores = []
     for row in answers:
-        score = sum(1 for ans in row if ans == correct_ans)
+        score = sum(1 for ans in row if ans == CORRECT_ANS)
         scores.append(score)
 
-    # 依總分排序，取高低分組
-    indexed = sorted(enumerate(scores), key=lambda x: x[1])
+    indexed      = sorted(enumerate(scores), key=lambda x: x[1])
     low_indices  = [i for i, _ in indexed[:N_GROUP]]
     high_indices = [i for i, _ in indexed[-N_GROUP:]]
 
@@ -194,11 +190,11 @@ def calc_pd(answers: list) -> dict:
     for q_idx in range(N_QUESTIONS):
         q_key = f'Q{q_idx + 1}'
 
-        correct_count = sum(1 for row in answers if row[q_idx] == correct_ans)
+        correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
         p = round(correct_count / n, 3)
 
-        high_correct = sum(1 for i in high_indices if answers[i][q_idx] == correct_ans)
-        low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == correct_ans)
+        high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
+        low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
         d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
 
         result[q_key] = {
@@ -208,6 +204,51 @@ def calc_pd(answers: list) -> dict:
         }
 
     return result
+
+
+# ──────────────────────────────────────────
+# 計算每題各選項被選次數
+# ──────────────────────────────────────────
+def calc_option_dist(answers: list) -> dict:
+    """
+    計算每題各選項（A/B/C/D）被選的次數。
+    回傳格式：{
+        'Q1': {'A': 20, 'B': 5, 'C': 3, 'D': 2},
+        ...
+    }
+    """
+    result = {}
+    for q_idx in range(N_QUESTIONS):
+        q_key  = f'Q{q_idx + 1}'
+        counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+        for row in answers:
+            opt = row[q_idx].strip().upper()
+            if opt in counts:
+                counts[opt] += 1
+        result[q_key] = counts
+    return result
+
+
+# ──────────────────────────────────────────
+# 生成四選一按鈕選項（含正解與干擾）
+# ──────────────────────────────────────────
+def make_question_choices(correct_q_idx: int, other_indices: list) -> tuple:
+    """
+    從 correct_q_idx（正解題號，0-based）和 other_indices 中隨機挑 3 題當干擾，
+    打亂後回傳 (labels, button_ids, correct_button_id)。
+    """
+    pool = list(other_indices)
+    random.shuffle(pool)
+    distractors = pool[:3]
+
+    all_q = [correct_q_idx] + distractors
+    random.shuffle(all_q)
+
+    labels     = [f'第 {q + 1} 題' for q in all_q]
+    button_ids = [f'Q{q + 1}'      for q in all_q]
+    correct_id = f'Q{correct_q_idx + 1}'
+
+    return labels, button_ids, correct_id
 
 
 # ──────────────────────────────────────────
@@ -228,7 +269,6 @@ SYSTEM_PROMPT_PD = """\
 """
 
 def ask_ai_interpretation(pd_result: dict) -> str:
-    """呼叫 OpenAI 解讀難度與鑑別度"""
     lines = []
     for q_key, val in pd_result.items():
         lines.append(
@@ -253,11 +293,159 @@ def ask_ai_interpretation(pd_result: dict) -> str:
 
 
 # ──────────────────────────────────────────
+# 核對流程
+# ──────────────────────────────────────────
+def verify_flow(pd_result: dict, answers: list):
+    """三題核對互動流程"""
+
+    all_idx = list(range(N_QUESTIONS))  # [0..7]
+
+    # ── 預先算出正解 ──────────────────────────
+    # 核對題 1：鑑別度最低（D 最小）的題目
+    lowest_d_idx  = min(all_idx, key=lambda i: pd_result[f'Q{i+1}']['d'])
+
+    # 核對題 2：難度最極端（|p - 0.5| 最大）的題目
+    extreme_p_idx = max(all_idx, key=lambda i: abs(pd_result[f'Q{i+1}']['p'] - 0.5))
+
+    # 核對題 3：鑑別度最低那題中，錯誤選項被選最多的選項
+    opt_dist      = calc_option_dist(answers)
+    focus_q_key   = f'Q{lowest_d_idx + 1}'
+    dist_focus    = opt_dist[focus_q_key]
+    wrong_opts    = {k: v for k, v in dist_focus.items() if k != CORRECT_ANS}
+    most_distract = max(wrong_opts, key=lambda k: wrong_opts[k])
+
+    # ── 核對題 1 ──────────────────────────────
+    send('接下來，我們先做一個「核對」吧～看你算得跟我一不一樣？', delay=0.8)
+    send(
+        '核對題 1：請選出「你最需要優先修改」的那一題\n'
+        '（通常是鑑別度最低、或出現負值的那題）',
+        delay=0.5
+    )
+
+    other_idx_1 = [i for i in all_idx if i != lowest_d_idx]
+    labels_1, ids_1, correct_id_1 = make_question_choices(lowest_d_idx, other_idx_1)
+    send_buttons(labels_1, button_ids=ids_1, delay=0.3)
+
+    ans_1 = wait_for_user()
+    if is_exit(ans_1):
+        return
+
+    if ans_1 == correct_id_1:
+        send('很好，你的判讀是對的。', delay=0.5)
+        write_log(f'[va_pd] 核對題1 答對，選={ans_1}')
+    else:
+        d_val = pd_result[focus_q_key]['d']
+        send(
+            f'沒關係，第 {lowest_d_idx + 1} 題的鑑別度（D={d_val}）其實更需要優先處理。',
+            delay=0.5
+        )
+        write_log(f'[va_pd] 核對題1 答錯，選={ans_1}，正解={correct_id_1}')
+
+    send_buttons(['下一題'], colors=['skyblue'], delay=0.5)
+    if is_exit(wait_for_user()):
+        return
+
+    # ── 核對題 2 ──────────────────────────────
+    send(
+        '核對題 2：請選出「難度最極端」的那一題\n'
+        '（最簡單或最困難都算，也就是 p 值距離 0.5 最遠的那題）',
+        delay=0.5
+    )
+
+    other_idx_2 = [i for i in all_idx if i != extreme_p_idx]
+    labels_2, ids_2, correct_id_2 = make_question_choices(extreme_p_idx, other_idx_2)
+    send_buttons(labels_2, button_ids=ids_2, delay=0.3)
+
+    ans_2 = wait_for_user()
+    if is_exit(ans_2):
+        return
+
+    if ans_2 == correct_id_2:
+        send('很好，你抓到最極端的那題了。', delay=0.5)
+        write_log(f'[va_pd] 核對題2 答對，選={ans_2}')
+    else:
+        p_val     = pd_result[f'Q{extreme_p_idx+1}']['p']
+        direction = '太簡單' if p_val > 0.5 else '太困難'
+        send(
+            f'算錯了？第 {extreme_p_idx + 1} 題才是最極端（{direction}，p={p_val}）的一題。',
+            delay=0.5
+        )
+        write_log(f'[va_pd] 核對題2 答錯，選={ans_2}，正解={correct_id_2}')
+
+    send_buttons(['下一題'], colors=['skyblue'], delay=0.5)
+    if is_exit(wait_for_user()):
+        return
+
+    # ── 核對題 3 ──────────────────────────────
+    send(
+        f'核對題 3：針對第 {lowest_d_idx + 1} 題，請選出「最多人選錯的選項」\n'
+        f'（排除正確答案 A，哪個選項最誘答？）',
+        delay=0.5
+    )
+
+    opt_labels = ['選項 A', '選項 B', '選項 C', '選項 D']
+    opt_ids    = ['A', 'B', 'C', 'D']
+    send_buttons(opt_labels, button_ids=opt_ids, delay=0.3)
+
+    ans_3 = wait_for_user()
+    if is_exit(ans_3):
+        return
+
+    if ans_3 == most_distract:
+        send(f'對，就是選項 {most_distract} 最容易誘答。', delay=0.5)
+        write_log(f'[va_pd] 核對題3 答對，選={ans_3}')
+    else:
+        send(
+            f'是嗎？我認為最容易誘答的是「選項 {most_distract}」\n'
+            f'（共有 {wrong_opts[most_distract]} 人選了這個選項）。',
+            delay=0.5
+        )
+        write_log(f'[va_pd] 核對題3 答錯，選={ans_3}，正解={most_distract}')
+
+    send_buttons(['完成核對'], colors=['lightgreen'], delay=0.5)
+    if is_exit(wait_for_user()):
+        return
+
+    send('三題核對完成！', delay=0.5)
+    write_log('[va_pd] 核對流程完成')
+
+
+# ──────────────────────────────────────────
 # 主要執行區塊
 # ──────────────────────────────────────────
 def main():
+    session_dir  = os.path.dirname(log_path) if log_path else '.'
+    matrix_path  = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+
     send(
-        '請你先把檔案下載下來，接下來，我們來算難度和鑑別度',
+        '你已完成 8 題命題，也拿到孿生班級的作答結果了。\n'
+        '接下來我們要做「審題」的事情，也就是用數據回頭檢討你每一題的品質。',
+        delay=0.5
+    )
+
+    send(
+        f'我先把原始作答資料準備好了。\n'
+        f'__LINK__/download?path={matrix_path}||下載：AnswerMatrix.csv\n'
+        f'（30 位孿生學生 × 8 題，每題選了哪個選項）\n'
+        f'你先把檔案下載下來，用它來算難度與鑑別度。',
+        delay=0.5
+    )
+
+    send(
+        '先算難度（p 值）：對每一題看 30 個人裡面，有幾個人答對。\n'
+        '公式：難度 p = 答對人數 ÷ 30\n'
+        '理解方式：p 越接近 1 越簡單；p 越接近 0 越困難。',
+        delay=0.5
+    )
+
+    send(
+        '再算鑑別度（D 值），這一步你只要做兩件事：\n\n'
+        'A. 先把 30 個人分成兩群：\n'
+        '   先算每個人的總分（0–8），依總分排序後分成兩群：\n'
+        '   高分組（分數最高的 8 人）、低分組（分數最低的 8 人）。\n\n'
+        'B. 對每一題算「兩群差距」：\n'
+        '   鑑別度 D =（高分組答對人數 ÷ 8）−（低分組答對人數 ÷ 8）\n\n'
+        '小提醒：因為每群只有 8 人，D 值會以 0.125 為刻度變動，這是正常的。',
         delay=0.5
     )
 
@@ -267,18 +455,19 @@ def main():
         send('（無法讀取作答資料，請聯絡助教。）', delay=0.5)
         return
 
-    send(f'已讀取 {len(answers)} 位孿生學生的作答，計算中…', delay=0.5)
-
     # 計算難度與鑑別度
+    _thinking(True)
+    time.sleep(1)
+    _thinking(False)
     pd_result = calc_pd(answers)
 
-    # 格式化結果訊息
+    # 顯示結果
     summary_lines = ['各題難度與鑑別度：\n']
     for q_key, val in pd_result.items():
         summary_lines.append(
             f'{q_key}｜難度 P = {val["p"]:.3f}｜鑑別度 D = {val["d"]:.3f}'
         )
-    send('\n'.join(summary_lines), delay=0.5)
+    send('\n'.join(summary_lines), delay=0.3)
     write_log(f'[va_pd] 難度鑑別度計算完成：{pd_result}')
 
     # AI 解讀
@@ -289,9 +478,17 @@ def main():
 
     if interpretation:
         send(interpretation, delay=0.3)
-        write_log(f'[va_pd] AI 解讀完成')
+        write_log('[va_pd] AI 解讀完成')
     else:
         send('（AI 解讀失敗，請聯絡助教。）', delay=0.3)
+
+    # 核對流程入口
+    send_buttons(['開始核對'], colors=['gold'], delay=0.8)
+    btn = wait_for_user()
+    if is_exit(btn):
+        return
+
+    verify_flow(pd_result, answers)
 
     # ↓↓↓ 後續流程在此繼續開發 ↓↓↓
 
