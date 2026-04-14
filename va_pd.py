@@ -63,6 +63,10 @@ def _lock(locked):
 def is_exit(val) -> bool:
     return val is None or val == '__INTERRUPTED__'
 
+def parse_btn(val: str) -> str:
+    """前端按鈕回傳格式為 'ID:label'，取冒號前的 ID。"""
+    return val.split(':')[0] if val and ':' in val else val
+
 def write_log(content: str):
     if not log_path:
         return
@@ -232,20 +236,12 @@ def calc_option_dist(answers: list) -> dict:
 # ──────────────────────────────────────────
 # 生成四選一按鈕選項（含正解與干擾）
 # ──────────────────────────────────────────
-def make_question_choices(correct_q_idx: int, other_indices: list) -> tuple:
+def make_question_choices(correct_q_idx: int) -> tuple:
     """
-    從 correct_q_idx（正解題號，0-based）和 other_indices 中隨機挑 3 題當干擾，
-    打亂後回傳 (labels, button_ids, correct_button_id)。
+    顯示全部 8 題，回傳 (labels, button_ids, correct_button_id)。
     """
-    pool = list(other_indices)
-    random.shuffle(pool)
-    distractors = pool[:3]
-
-    all_q = [correct_q_idx] + distractors
-    random.shuffle(all_q)
-
-    labels     = [f'第 {q + 1} 題' for q in all_q]
-    button_ids = [f'Q{q + 1}'      for q in all_q]
+    labels     = [f'第 {q + 1} 題' for q in range(N_QUESTIONS)]
+    button_ids = [f'Q{q + 1}'      for q in range(N_QUESTIONS)]
     correct_id = f'Q{correct_q_idx + 1}'
 
     return labels, button_ids, correct_id
@@ -322,13 +318,13 @@ def verify_flow(pd_result: dict, answers: list):
         delay=0.5
     )
 
-    other_idx_1 = [i for i in all_idx if i != lowest_d_idx]
-    labels_1, ids_1, correct_id_1 = make_question_choices(lowest_d_idx, other_idx_1)
-    send_buttons(labels_1, button_ids=ids_1, delay=0.3)
+    labels_1, ids_1, correct_id_1 = make_question_choices(lowest_d_idx)
+    send_buttons(labels_1, button_ids=ids_1, size='small', delay=0.3)
 
     ans_1 = wait_for_user()
     if is_exit(ans_1):
         return
+    ans_1 = parse_btn(ans_1)
 
     if ans_1 == correct_id_1:
         send('很好，你的判讀是對的。', delay=0.5)
@@ -341,7 +337,7 @@ def verify_flow(pd_result: dict, answers: list):
         )
         write_log(f'[va_pd] 核對題1 答錯，選={ans_1}，正解={correct_id_1}')
 
-    send_buttons(['下一題'], colors=['skyblue'], delay=0.5)
+    send_buttons(['下一題'], colors=['blue'], delay=0.5)
     if is_exit(wait_for_user()):
         return
 
@@ -352,13 +348,13 @@ def verify_flow(pd_result: dict, answers: list):
         delay=0.5
     )
 
-    other_idx_2 = [i for i in all_idx if i != extreme_p_idx]
-    labels_2, ids_2, correct_id_2 = make_question_choices(extreme_p_idx, other_idx_2)
-    send_buttons(labels_2, button_ids=ids_2, delay=0.3)
+    labels_2, ids_2, correct_id_2 = make_question_choices(extreme_p_idx)
+    send_buttons(labels_2, button_ids=ids_2, size='small', delay=0.3)
 
     ans_2 = wait_for_user()
     if is_exit(ans_2):
         return
+    ans_2 = parse_btn(ans_2)
 
     if ans_2 == correct_id_2:
         send('很好，你抓到最極端的那題了。', delay=0.5)
@@ -372,7 +368,7 @@ def verify_flow(pd_result: dict, answers: list):
         )
         write_log(f'[va_pd] 核對題2 答錯，選={ans_2}，正解={correct_id_2}')
 
-    send_buttons(['下一題'], colors=['skyblue'], delay=0.5)
+    send_buttons(['下一題'], colors=['blue'], delay=0.5)
     if is_exit(wait_for_user()):
         return
 
@@ -390,6 +386,7 @@ def verify_flow(pd_result: dict, answers: list):
     ans_3 = wait_for_user()
     if is_exit(ans_3):
         return
+    ans_3 = parse_btn(ans_3)
 
     if ans_3 == most_distract:
         send(f'對，就是選項 {most_distract} 最容易誘答。', delay=0.5)
@@ -402,7 +399,7 @@ def verify_flow(pd_result: dict, answers: list):
         )
         write_log(f'[va_pd] 核對題3 答錯，選={ans_3}，正解={most_distract}')
 
-    send_buttons(['完成核對'], colors=['lightgreen'], delay=0.5)
+    send_buttons(['完成核對'], colors=['green'], delay=0.5)
     if is_exit(wait_for_user()):
         return
 
@@ -414,8 +411,8 @@ def verify_flow(pd_result: dict, answers: list):
 # 主要執行區塊
 # ──────────────────────────────────────────
 def main():
-    session_dir  = os.path.dirname(log_path) if log_path else '.'
-    matrix_path  = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+    session_dir = os.path.dirname(log_path) if log_path else '.'
+    matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
 
     send(
         '你已完成 8 題命題，也拿到孿生班級的作答結果了。\n'
