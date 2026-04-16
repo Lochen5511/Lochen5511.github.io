@@ -144,6 +144,11 @@ def main():
     base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
     import subprocess
     if 'btn_validity' in user_reply:
+        try:
+            requests.post(f'{BACKEND}/update_unit',
+                          json={'session_id': session_id, 'unit': '效度'}, timeout=5)
+        except Exception as e:
+            print(f"[update_unit 失敗] {e}")
         subprocess.Popen(['python', 'validity.py'] + base_args,
                          cwd=os.path.dirname(os.path.abspath(__file__)))
     elif 'btn_reliability' in user_reply:
