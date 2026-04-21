@@ -326,10 +326,13 @@
       if (!data.session_id) throw new Error('無 session_id');
       sessionId = data.session_id;
     } catch (e) {
-      console.warn('[enter 失敗]', e.message);
-      showStatus('連線失敗，請稍後再試。');
-      enterBtn.disabled = false;
-      return;
+      console.warn('[enter 失敗，使用本地 session]', e.message);
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const ts  = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_` +
+                  `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const rand = Math.random().toString(36).substring(2, 10);
+      sessionId = `${ts}_${rand}`;
     }
 
     // ── 管理員模式：名字為 Tempus_Aeternum 時走 /greeting_admin ──
