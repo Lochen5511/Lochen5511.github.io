@@ -220,7 +220,6 @@ def save_answer_matrix(answers: list, questions: list):
     session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
     out_path    = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
 
-    # 從題庫取得正確答案（A 永遠是正確答案，見 validity.py 的 ask_question）
     correct_answers = ['A'] * 8
 
     header = [f'Q{i+1}' for i in range(8)] + ['總分']
@@ -229,13 +228,13 @@ def save_answer_matrix(answers: list, questions: list):
             writer = csv.writer(f)
             # 第一列：欄位標題
             writer.writerow(header)
-            # 第二列：正確答案
-            writer.writerow(correct_answers + ['正確答案'])
-            # 每個學生的作答與得分
-            for i, row in enumerate(answers):
-                score = sum(1 for q_idx, ans in enumerate(row)
-                            if q_idx < 8 and ans == correct_answers[q_idx])
-                writer.writerow(row + [score])
+            # 第二列：正確答案（以 1 表示）
+            writer.writerow([1] * 8 + ['正確答案'])
+            # 每個學生的作答（A=1, BCD=0）與總分
+            for row in answers:
+                binary = [1 if ans == 'A' else 0 for ans in row[:8]]
+                score  = sum(binary)
+                writer.writerow(binary + [score])
         print(f"[AnswerMatrix] 已儲存：{out_path}（{len(answers)} 筆）")
         write_log(f'[que_ana] AnswerMatrix 已儲存：{out_path}')
     except Exception as e:
@@ -253,10 +252,7 @@ def parse_questions_from_log() -> list:
             for line in f:
                 if '[命題' not in line or '完成]' not in line:
                     continue
-                # 格式：[2024-01-01 12:00:00] [命題N完成] stem=... | A=... | ...
-                # 跳過時間戳記前綴（第一個 ]），再找 [命題N完成] 後的內容
                 stripped = line.strip()
-                # 移除開頭時間戳記（若存在）
                 if stripped.startswith('[') and '] ' in stripped:
                     stripped = stripped.split('] ', 1)[-1]
                 body  = stripped.split(']', 1)[-1].strip()

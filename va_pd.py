@@ -31,7 +31,7 @@ USER_TIMEOUT = 300
 N_TOTAL      = 30   # 模擬學生總數
 N_GROUP      = 8    # 高低分組人數
 N_QUESTIONS  = 8    # 題目數
-CORRECT_ANS  = 'A'  # 每題正確答案固定為 A
+CORRECT_ANS  = '1'  # AnswerMatrix 中 A=1, BCD=0
 
 
 # ──────────────────────────────────────────
@@ -327,6 +327,22 @@ def verify_flow(pd_result: dict):
 # ──────────────────────────────────────────
 # 主要執行區塊
 # ──────────────────────────────────────────
+def parse_pd_input(text: str):
+    """
+    解析用戶輸入的 (p,d) 格式。
+    成功回傳 (p_str, d_str)，失敗回傳 None。
+    只接受半形括弧、半形逗點、無空格。
+    """
+    t = text.strip()
+    if not (t.startswith('(') and t.endswith(')')):
+        return None
+    inner = t[1:-1]
+    parts = inner.split(',')
+    if len(parts) != 2:
+        return None
+    return (parts[0], parts[1])
+
+
 def main():
     session_dir = os.path.dirname(log_path) if log_path else '.'
     matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
@@ -338,30 +354,25 @@ def main():
     )
 
     send(
-        f'我先把原始作答資料準備好了。\n'
-        f'__LINK__/download?path={matrix_path}||下載：AnswerMatrix.csv\n'
-        f'（30 位孿生學生 × 8 題，每題選了哪個選項）\n'
-        f'你先把檔案下載下來，用它來算難度與鑑別度。',
+        f'__LINK__/download?path={matrix_path}||下載：AnswerMatrix.csv',
+        delay=0.3
+    )
+
+    send(
+        '待會，我們先算難度（p 值）：\n'
+        '公式：難度 p = 答對人數 ÷ 30，p 越接近 1 越簡單；p 越接近 0 越困難。',
         delay=0.5
     )
 
     send(
-        '先算難度（p 值）：對每一題看 30 個人裡面，有幾個人答對。\n'
-        '公式：難度 p = 答對人數 ÷ 30\n'
-        '理解方式：p 越接近 1 越簡單；p 越接近 0 越困難。',
+        '然後再算鑑別度（D 值）：\n'
+        'A. 分高低分組（各 8 人）\n'
+        'B. D =（高分組答對人數 ÷ 8）−（低分組答對人數 ÷ 8）\n'
+        'D 值以 0.125 為刻度變動，這是正常的。',
         delay=0.5
     )
 
-    send(
-        '再算鑑別度（D 值），這一步你只要做兩件事：\n\n'
-        'A. 先把 30 個人分成兩群：\n'
-        '   先算每個人的總分（0–8），依總分排序後分成兩群：\n'
-        '   高分組（分數最高的 8 人）、低分組（分數最低的 8 人）。\n\n'
-        'B. 對每一題算「兩群差距」：\n'
-        '   鑑別度 D =（高分組答對人數 ÷ 8）−（低分組答對人數 ÷ 8）\n\n'
-        '小提醒：因為每群只有 8 人，D 值會以 0.125 為刻度變動，這是正常的。',
-        delay=0.5
-    )
+    send('先從第一題開始吧。', delay=0.5)
 
     # 讀取 AnswerMatrix
     answers = load_answer_matrix()
@@ -374,15 +385,42 @@ def main():
     time.sleep(1)
     _thinking(False)
     pd_result = calc_pd(answers)
-
-    # 顯示結果
-    summary_lines = ['各題難度與鑑別度：\n']
-    for q_key, val in pd_result.items():
-        summary_lines.append(
-            f'{q_key}｜難度 P = {val["p"]:.3f}｜鑑別度 D = {val["d"]:.3f}'
-        )
-    send('\n'.join(summary_lines), delay=0.3)
     write_log(f'[va_pd] 難度鑑別度計算完成：{pd_result}')
+
+    # ── 逐題驗證 ──────────────────────────────
+    for q_idx in range(N_QUESTIONS):
+        q_num = q_idx + 1
+        q_key = f'Q{q_num}'
+        correct_p = f'{pd_result[q_key]["p"]:.3f}'
+        correct_d = f'{pd_result[q_key]["d"]:.3f}'
+        expected  = f'({correct_p},{correct_d})'
+
+        if q_idx == 0:
+            send(
+                f'你算出的第 {q_num} 題的(難度,鑑別度)是多少？\n'
+                f'用半形的括弧和逗點發送給我，不需要加入空格，也不要用全形的標點符號，'
+                f'不然會視同錯誤',
+                delay=0.5
+            )
+        else:
+            send(f'你算出的第 {q_num} 題的(難度,鑑別度)是多少？', delay=0.5)
+
+        _lock(False)
+        user_input = wait_for_user()
+        if is_exit(user_input):
+            return
+
+        parsed = parse_pd_input(user_input)
+        if parsed and f'({parsed[0]},{parsed[1]})' == expected:
+            send(f'第 {q_num} 題答對了！', delay=0.3)
+            write_log(f'[va_pd] 第{q_num}題 用戶答對，輸入={user_input}')
+        else:
+            send(
+                f'第 {q_num} 題答錯了。\n'
+                f'正確答案是 {expected}（難度 p={correct_p}，鑑別度 D={correct_d}）。',
+                delay=0.3
+            )
+            write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解={expected}')
 
     # 核對流程入口
     send_buttons(['開始核對'], colors=['gold'], delay=0.8)
