@@ -224,9 +224,66 @@ def make_question_choices(correct_q_idx: int) -> tuple:
 
 
 
-# ──────────────────────────────────────────
-# 核對流程
-# ──────────────────────────────────────────
+def _send_result_email(to_addr, username, return_id, pd_result):
+    """寄送難度鑑別度結果至學生信箱"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.header import Header
+
+    TAMAIL   = os.getenv('TAMAIL')
+    MAILPASS = os.getenv('MAILPASS')
+
+    if not TAMAIL or not MAILPASS:
+        print("[email] 缺少 TAMAIL 或 MAILPASS，無法寄信")
+        write_log('[EMAIL] 寄送失敗：缺少 TAMAIL 或 MAILPASS')
+        return False
+
+    def d_label(d):
+        if d >= 0.4:   return '優異'
+        elif d >= 0.25: return '正常'
+        else:           return '待加強'
+
+    table_lines = ['題目 | 難度 P | 鑑別度 D | 評價']
+    table_lines.append('-' * 32)
+    for q_key, val in pd_result.items():
+        table_lines.append(
+            f"{q_key}   | {val['p']}   | {val['d']}   | {d_label(val['d'])}"
+        )
+    table_str = '\n'.join(table_lines)
+
+    subject = '孿生AI出題測試結果'
+    body = (
+        f'{username} 你好，\n\n'
+        f'以下是你出題的難度與鑑別度分析結果：\n\n'
+        f'{table_str}\n\n'
+        f'你的下次學習代碼為：{return_id}\n'
+        f'下次登入時，請於登入介面輸入此代碼進入下一階段。'
+    )
+
+    msg = MIMEMultipart()
+    msg['From']    = f'塔伯特 <{TAMAIL}>'
+    msg['To']      = to_addr
+    msg['Subject'] = Header(subject, 'utf-8').encode()
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    try:
+        smtp = smtplib.SMTP('smtp.gmail.com', 587)
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(TAMAIL, MAILPASS)
+        smtp.sendmail(TAMAIL, to_addr, msg.as_string())
+        smtp.quit()
+        print(f"[email] 已寄送至 {to_addr}")
+        write_log(f'[EMAIL] 寄送成功 → {to_addr}')
+        return True
+    except Exception as e:
+        print(f"[email 寄送失敗] {e}")
+        write_log(f'[EMAIL] 寄送失敗：{e}')
+        return False
+
+
+
 def verify_flow(pd_result: dict):
     """三題核對互動流程"""
 
@@ -469,13 +526,55 @@ def main():
     else:
         send('（Return ID 產生失敗，請聯絡助教。）', delay=0.5)
 
-    # 核對流程入口
-    send_buttons(['開始核對'], colors=['gold'], delay=0.8)
-    btn = wait_for_user()
-    if is_exit(btn):
-        return
+    # ── 收集 email 並寄送結果 ──────────────────
+    while True:
+        send(
+            '請輸入完整信箱，'
+            '我會把代碼和結果寄送到你的信箱！',
+            delay=0.5
+        )
 
-    verify_flow(pd_result)
+        email_reply = wait_for_user()
+        if is_exit(email_reply):
+            return
+
+        student_email = email_reply.strip()
+
+        send(f'確定信箱無誤嗎？\n{student_email}', delay=0.3)
+        send_buttons(
+            labels     = ['正確無誤', '需要修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_email_ok', 'btn_email_edit']
+        )
+
+        confirm = wait_for_user()
+        if is_exit(confirm):
+            return
+
+        confirm_id = parse_btn(confirm)
+        if confirm_id == 'btn_email_ok':
+            write_log(f'[EMAIL] 學生確認信箱：{student_email}')
+            break
+
+    success = _send_result_email(
+        to_addr   = student_email,
+        username  = username,
+        return_id = rid or '',
+        pd_result = pd_result,
+    )
+
+    if success:
+        send('已寄出！請記得檢查你的信箱（包含垃圾郵件匣）。', delay=0.5)
+    else:
+        send('郵件寄送失敗，請手動記錄代碼後再關閉此介面。', delay=0.5)
+
+    send_buttons(
+        labels     = ['回到上一頁'],
+        colors     = ['gold'],
+        size       = 'medium',
+        button_ids = ['btn_goto_enter']
+    )
 
     # ── 更新 unit 為「出題」────────────────────
     try:
