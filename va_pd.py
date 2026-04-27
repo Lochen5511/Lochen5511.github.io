@@ -192,11 +192,11 @@ def calc_pd(answers: list) -> dict:
         q_key = f'Q{q_idx + 1}'
 
         correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
-        p = round(correct_count / n, 3)
+        p = correct_count / n
 
         high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
         low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
-        d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
+        d = high_correct / N_GROUP - low_correct / N_GROUP
 
         result[q_key] = {
             'p':       p,
@@ -391,9 +391,8 @@ def main():
     for q_idx in range(N_QUESTIONS):
         q_num = q_idx + 1
         q_key = f'Q{q_num}'
-        correct_p = f'{pd_result[q_key]["p"]:.3f}'
-        correct_d = f'{pd_result[q_key]["d"]:.3f}'
-        expected  = f'({correct_p},{correct_d})'
+        correct_p = pd_result[q_key]['p']
+        correct_d = pd_result[q_key]['d']
 
         if q_idx == 0:
             send(
@@ -411,16 +410,64 @@ def main():
             return
 
         parsed = parse_pd_input(user_input)
-        if parsed and f'({parsed[0]},{parsed[1]})' == expected:
+        user_correct = False
+        if parsed:
+            try:
+                user_p = float(parsed[0])
+                user_d = float(parsed[1])
+                user_correct = (user_p == correct_p and user_d == correct_d)
+            except ValueError:
+                pass
+
+        if user_correct:
             send(f'第 {q_num} 題答對了！', delay=0.3)
             write_log(f'[va_pd] 第{q_num}題 用戶答對，輸入={user_input}')
         else:
             send(
                 f'第 {q_num} 題答錯了。\n'
-                f'正確答案是 {expected}（難度 p={correct_p}，鑑別度 D={correct_d}）。',
+                f'正確答案是 ({correct_p},{correct_d})（難度 p={correct_p}，鑑別度 D={correct_d}）。',
                 delay=0.3
             )
-            write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解={expected}')
+            write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解=({correct_p},{correct_d})')
+
+    # ── 發送難度鑑別度總表 ────────────────────
+    def d_label(d):
+        if d >= 0.4:
+            return '優異'
+        elif d >= 0.25:
+            return '正常'
+        else:
+            return '待加強'
+
+    table_lines = ['各題難度與鑑別度總覽：\n']
+    table_lines.append('題目｜難度 P｜鑑別度 D｜評價')
+    table_lines.append('─' * 28)
+    for q_key, val in pd_result.items():
+        label = d_label(val['d'])
+        table_lines.append(
+            f'{q_key}　｜{val["p"]}　｜{val["d"]}　｜{label}'
+        )
+    send('\n'.join(table_lines), delay=0.5)
+    write_log('[va_pd] 發送難度鑑別度總表')
+
+    # ── 產生 Return ID ────────────────────────
+    rid = None
+    try:
+        res = requests.post(f'{BACKEND}/generate_return_id',
+                            json={'session_id': session_id}, timeout=5)
+        rid = res.json().get('return_id')
+    except Exception as e:
+        print(f"[va_pd] 產生 Return ID 失敗：{e}")
+
+    if rid:
+        send(
+            f'你的學習 ID 是：{rid}\n'
+            f'請記下這組 ID，下次課程可以用它繼續學習。',
+            delay=0.5
+        )
+        write_log(f'[va_pd] Return ID 已產生：{rid}')
+    else:
+        send('（Return ID 產生失敗，請聯絡助教。）', delay=0.5)
 
     # 核對流程入口
     send_buttons(['開始核對'], colors=['gold'], delay=0.8)
@@ -430,7 +477,14 @@ def main():
 
     verify_flow(pd_result)
 
-    # ↓↓↓ 後續流程在此繼續開發 ↓↓↓
+    # ── 更新 unit 為「出題」────────────────────
+    try:
+        requests.post(f'{BACKEND}/update_unit',
+                      json={'session_id': session_id, 'unit': '出題'}, timeout=5)
+        write_log('[va_pd] unit 已更新為「出題」')
+        print(f"[va_pd] unit 已更新為「出題」session={session_id}")
+    except Exception as e:
+        print(f"[va_pd] 更新 unit 失敗：{e}")
 
     print("[va_pd.py] 執行完畢")
 

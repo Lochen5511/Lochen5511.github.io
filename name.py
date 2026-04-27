@@ -82,8 +82,8 @@ def _db_update(update_fn):
     安全的 DB 更新：取得跨進程鎖 → 讀取 → 修改 → 寫入 → 釋放鎖。
     update_fn(db) 直接修改 db dict，不需回傳值。
     """
-    with DB_LOCK:  # 執行緒鎖
-        acquired = _acquire_db_lock()  # 跨進程鎖
+    with DB_LOCK:
+        acquired = _acquire_db_lock()
         try:
             db = load_db()
             update_fn(db)
@@ -133,13 +133,14 @@ def generate_return_id(session_id: str) -> str:
     print(f"[db] 產生 return_id={result['rid']} for session={session_id}")
     return result['rid']
 
-def lookup_return_id(return_id: str) -> dict | None:
+def lookup_return_id(return_id: str) -> tuple[str | None, dict | None]:
+    """回傳 (session_id, record)"""
     db = load_db()
-    index = db.get('__return_index__', {})
+    index      = db.get('__return_index__', {})
     session_id = index.get(return_id)
     if session_id:
-        return db.get(session_id)
-    return None
+        return session_id, db.get(session_id)
+    return None, None
 
 def lookup_session(session_id: str) -> dict | None:
     db = load_db()
@@ -150,7 +151,6 @@ def lookup_session(session_id: str) -> dict | None:
 # 工具
 # ──────────────────────────────────────────
 def write_log(log_path: str, content: str):
-    """後端結構化紀錄寫入（含時間戳記）"""
     if not log_path:
         return
     try:
@@ -213,18 +213,17 @@ def enter_id():
     if not return_id:
         return jsonify({'success': False, 'error': '請輸入 ID'}), 400
 
-    record = lookup_return_id(return_id)
+    session_id, record = lookup_return_id(return_id)
     if not record:
         return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
 
     username = record['username']
     log_path = record['log_path']
 
-    session_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
-
     write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
-    print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
+    print(f"[enter_id] return_id={return_id} user={username} session={session_id}")
 
+    # 回傳原本的 session_id，供 greeting_set_que 查詢 unit
     return jsonify({
         'success':    True,
         'username':   username,
@@ -242,22 +241,26 @@ def greeting_set_que():
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
 
-    record   = lookup_session(session_id)
+    record = lookup_session(session_id)
     if record:
         log_path = record.get('log_path', '')
+        unit     = record.get('unit', '')
     else:
         session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
         os.makedirs(session_dir, exist_ok=True)
         log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+        unit     = ''
+
+    script = 'true_ending.py' if unit == '出題' else 'va_set_que.py'
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
         threading.Thread(
             target=launch_script,
-            args=('va_set_que.py', username, session_id, log_path),
+            args=(script, username, session_id, log_path),
             daemon=True
         ).start()
-        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
+        print(f"[greeting_set_que] 啟動 {script}  session={session_id}  unit={unit}")
     else:
         print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
 
@@ -276,7 +279,7 @@ def greeting_admin():
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
 
-    record   = lookup_session(session_id)
+    record = lookup_session(session_id)
     if record:
         log_path = record.get('log_path', '')
     else:
@@ -309,7 +312,7 @@ def greeting():
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
 
-    record   = lookup_session(session_id)
+    record = lookup_session(session_id)
     if record:
         log_path = record.get('log_path', '')
     else:
@@ -389,7 +392,6 @@ def download_file():
     if not file_path:
         return jsonify({'error': '未指定檔案路徑'}), 400
 
-    # 安全性：只允許下載 LOG_DIR 內的檔案
     abs_path = os.path.abspath(file_path)
     abs_log  = os.path.abspath(LOG_DIR)
     if not abs_path.startswith(abs_log):
@@ -564,8 +566,6 @@ def fetch_user_input():
 
 
 # ── /log ────────────────────────────────
-# main.html 統一寫入入口
-# 修改：接收前端傳入的 timestamp，寫入格式為 [timestamp] 角色：訊息
 @app.route('/log', methods=['POST', 'OPTIONS'])
 def log_message():
     if request.method == 'OPTIONS':
@@ -576,7 +576,7 @@ def log_message():
     session_id = data.get('session_id', '')
     role       = data.get('role', 'unknown')
     message    = data.get('message', '').strip()
-    timestamp  = data.get('timestamp', '')  # 修改：接收前端時間戳記
+    timestamp  = data.get('timestamp', '')
 
     if not message:
         return jsonify({'success': False}), 400
@@ -589,9 +589,9 @@ def log_message():
         session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
         os.makedirs(session_dir, exist_ok=True)
         log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
-    label    = '用戶' if role == 'user' else 'AI'
 
-    # 修改：若前端有傳入時間戳記則使用，否則由後端產生
+    label = '用戶' if role == 'user' else 'AI'
+
     if not timestamp:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
