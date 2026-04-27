@@ -252,6 +252,9 @@ def greeting_set_que():
         unit     = ''
 
     script = 'true_ending.py' if unit == '出題' else 'va_set_que.py'
+    print("收到資料=", data)
+    print("session_id=", repr(session_id))
+    print("是否存在=", session_id in load_db())
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
