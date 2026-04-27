@@ -222,7 +222,7 @@ def save_answer_matrix(answers: list, questions: list):
 
     correct_answers = ['A'] * 8
 
-    header = [f'Q{i+1}' for i in range(8)] + ['總分']
+    header = [f'Q{i+1}' for i in range(8)] + ['Total']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)

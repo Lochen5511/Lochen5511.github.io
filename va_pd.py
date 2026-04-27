@@ -192,11 +192,11 @@ def calc_pd(answers: list) -> dict:
         q_key = f'Q{q_idx + 1}'
 
         correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
-        p = correct_count / n
+        p = round(correct_count / n, 3)
 
         high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
         low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
-        d = high_correct / N_GROUP - low_correct / N_GROUP
+        d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
 
         result[q_key] = {
             'p':       p,
@@ -281,104 +281,6 @@ def _send_result_email(to_addr, username, return_id, pd_result):
         print(f"[email 寄送失敗] {e}")
         write_log(f'[EMAIL] 寄送失敗：{e}')
         return False
-
-
-
-def verify_flow(pd_result: dict):
-    """三題核對互動流程"""
-
-    all_idx = list(range(N_QUESTIONS))  # [0..7]
-
-    # ── 預先算出正解 ──────────────────────────
-    # 核對題 1：鑑別度最低（D 最小）的題目
-    lowest_d_idx  = min(all_idx, key=lambda i: pd_result[f'Q{i+1}']['d'])
-
-    # 核對題 2：難度最極端（|p - 0.5| 最大）的題目
-    extreme_p_idx = max(all_idx, key=lambda i: abs(pd_result[f'Q{i+1}']['p'] - 0.5))
-
-    focus_q_key = f'Q{lowest_d_idx + 1}'
-
-    # ── 核對題 1 ──────────────────────────────
-    send('接下來，我們先做一個「核對」吧～看你算得跟我一不一樣？', delay=0.8)
-    send(
-        '請選出「你最需要優先修改」的那一題（也就是鑑別度最低的那題）。',
-        delay=0.5
-    )
-
-    labels_1, ids_1, correct_id_1 = make_question_choices(lowest_d_idx)
-    send_buttons(labels_1, button_ids=ids_1, size='small', delay=0.3)
-
-    ans_1 = wait_for_user()
-    if is_exit(ans_1):
-        return
-    ans_1 = parse_btn(ans_1)
-
-    if ans_1 == correct_id_1:
-        send('沒錯，我也覺得這題應該先修改，他的鑑別度太低了。', delay=0.5)
-        write_log(f'[va_pd] 核對題1 答對，選={ans_1}')
-    else:
-        d_val = pd_result[focus_q_key]['d']
-        send(
-            f'根據我的計算，第 {lowest_d_idx + 1} 題的鑑別度更低（D={d_val}），更應該先修改。',
-            delay=0.5
-        )
-        write_log(f'[va_pd] 核對題1 答錯，選={ans_1}，正解={correct_id_1}')
-
-    send_buttons(['下一題'], colors=['blue'], delay=0.5)
-    if is_exit(wait_for_user()):
-        return
-
-    # ── 核對題 2 ──────────────────────────────
-    send(
-        '接著，請選出「難度最極端」的那一題（最簡單或最困難都算）。',
-        delay=0.5
-    )
-
-    labels_2, ids_2, correct_id_2 = make_question_choices(extreme_p_idx)
-    send_buttons(labels_2, button_ids=ids_2, size='small', delay=0.3)
-
-    ans_2 = wait_for_user()
-    if is_exit(ans_2):
-        return
-    ans_2 = parse_btn(ans_2)
-
-    if ans_2 == correct_id_2:
-        p_val     = pd_result[f'Q{extreme_p_idx+1}']['p']
-        direction = '太高' if p_val > 0.5 else '太低'
-        send(f'沒錯！這題的難度{direction}了！', delay=0.5)
-        write_log(f'[va_pd] 核對題2 答對，選={ans_2}')
-    else:
-        p_val     = pd_result[f'Q{extreme_p_idx+1}']['p']
-        direction = '太簡單' if p_val > 0.5 else '太困難'
-        send(
-            f'其實第 {extreme_p_idx + 1} 題的難度更極端，來到了 {p_val}，'
-            f'這題是更需要修改的。',
-            delay=0.5
-        )
-        write_log(f'[va_pd] 核對題2 答錯，選={ans_2}，正解={correct_id_2}')
-
-    send_buttons(['下一題'], colors=['blue'], delay=0.5)
-    if is_exit(wait_for_user()):
-        return
-
-    # ── 過渡：進入改題 ────────────────────────
-    send(
-        '接下來，我們要進入「改題」。\n'
-        '而且我會解鎖一個很有用的功能：你可以把孿生學生叫出來，'
-        '直接問他為什麼會選那個選項，這樣你改題會快很多。',
-        delay=0.8
-    )
-    send(
-        '接下來我們不會把 8 題都拿來改，因為那會浪費力氣。\n'
-        '我們只改「真的需要改」的題目（含選項）。',
-        delay=0.5
-    )
-
-    send_buttons(['開始改題'], colors=['gold'], delay=0.5)
-    if is_exit(wait_for_user()):
-        return
-
-    write_log('[va_pd] 核對流程完成，進入改題')
 
 
 # ──────────────────────────────────────────
