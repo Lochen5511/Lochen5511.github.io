@@ -228,8 +228,6 @@ def save_answer_matrix(answers: list, questions: list):
             writer = csv.writer(f)
             # 第一列：欄位標題
             writer.writerow(header)
-            # 第二列：正確答案（以 1 表示）
-            writer.writerow([1] * 8 + ['正確答案'])
             # 每個學生的作答（A=1, BCD=0）與總分
             for row in answers:
                 binary = [1 if ans == 'A' else 0 for ans in row[:8]]

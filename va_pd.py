@@ -153,7 +153,7 @@ def load_answer_matrix() -> list:
         # 第一列：標題（Q1~Q8, 總分）
         # 第二列：正確答案
         # 第三列起：學生作答
-        for row in rows[2:]:
+        for row in rows[1:]:
             if len(row) >= N_QUESTIONS:
                 answers.append(row[:N_QUESTIONS])
     except Exception as e:
@@ -313,11 +313,6 @@ def main():
     )
 
     send(
-        f'__LINK__/download?path={matrix_path}||下載：AnswerMatrix.csv',
-        delay=0.3
-    )
-
-    send(
         '待會，我們先算難度（p 值）：\n'
         '公式：難度 p = 答對人數 ÷ 30，p 越接近 1 越簡單；p 越接近 0 越困難。',
         delay=0.5
@@ -356,7 +351,7 @@ def main():
         if q_idx == 0:
             send(
                 f'你算出的第 {q_num} 題的(難度,鑑別度)是多少？\n'
-                f'用半形的括弧和逗點發送給我，不需要加入空格，也不要用全形的標點符號，'
+                f'用半形的括弧和逗點發送給我，只計算到小數點後第三位，不需要加入空格，也不要用全形的標點符號，'
                 f'不然會視同錯誤',
                 delay=0.5
             )
