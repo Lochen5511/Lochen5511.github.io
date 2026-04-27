@@ -1,7 +1,7 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_file
 from flask_cors import CORS
 from collections import defaultdict
-import os, subprocess, threading, json, time, uuid
+import os, subprocess, threading, json, time, uuid, random, string
 from datetime import datetime
 
 # ──────────────────────────────────────────
@@ -14,6 +14,7 @@ DB_PATH   = os.path.join(LOG_DIR, 'session_db.json')
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+
 @app.after_request
 def cors_headers(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
@@ -25,24 +26,33 @@ def cors_headers(response):
 # ──────────────────────────────────────────
 # 狀態（記憶體）
 # ──────────────────────────────────────────
-message_queues    = defaultdict(list)
-thinking_states   = {}
-user_input_queues = defaultdict(list)
-launched_sessions = set()
-last_seen         = {}
-input_locked      = set()
-interrupted_sessions = set()
+message_queues        = defaultdict(list)
+thinking_states       = {}
+user_input_queues     = defaultdict(list)
+launched_sessions     = set()
+last_seen             = {}
+input_locked          = set()
+interrupted_sessions  = set()
 
 USER_TIMEOUT = 300
 
 
 # ──────────────────────────────────────────
-# Session 庫（本地 JSON）
+# 工具函式
+# ──────────────────────────────────────────
+def norm_sid(v):
+    """統一 session_id / return_id 格式"""
+    return str(v or '').strip().upper()
+
+
+# ──────────────────────────────────────────
+# Session DB
 # ──────────────────────────────────────────
 DB_LOCK      = threading.Lock()
-DB_LOCK_FILE = DB_PATH + '.lock'
+DB_LOCK_FILE = DB_PATH + ".lock"
 
-def _acquire_db_lock(timeout: float = 10.0) -> bool:
+
+def _acquire_db_lock(timeout=10):
     start = time.time()
     while True:
         try:
@@ -51,122 +61,161 @@ def _acquire_db_lock(timeout: float = 10.0) -> bool:
             return True
         except FileExistsError:
             if time.time() - start > timeout:
-                print(f"[db] 鎖定逾時，強制繼續")
+                print("[db] lock timeout")
                 return False
             time.sleep(0.05)
+
 
 def _release_db_lock():
     try:
         os.remove(DB_LOCK_FILE)
-    except: pass
+    except:
+        pass
 
-def load_db() -> dict:
+
+def load_db():
     try:
         if os.path.exists(DB_PATH):
-            with open(DB_PATH, 'r', encoding='utf-8') as f:
+            with open(DB_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
-        print(f"[db 讀取失敗] {e}")
+        print("[db read fail]", e)
     return {}
 
-def save_db(db: dict):
+
+def save_db(db):
     try:
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        with open(DB_PATH, 'w', encoding='utf-8') as f:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(DB_PATH, "w", encoding="utf-8") as f:
             json.dump(db, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"[db 寫入失敗] {e}")
+        print("[db save fail]", e)
 
-def _db_update(update_fn):
-    """
-    安全的 DB 更新：取得跨進程鎖 → 讀取 → 修改 → 寫入 → 釋放鎖。
-    update_fn(db) 直接修改 db dict，不需回傳值。
-    """
+
+def _db_update(fn):
     with DB_LOCK:
-        acquired = _acquire_db_lock()
+        locked = _acquire_db_lock()
         try:
             db = load_db()
-            update_fn(db)
+            fn(db)
             save_db(db)
         finally:
-            if acquired:
+            if locked:
                 _release_db_lock()
 
-def register_session(username: str, session_id: str, log_path: str):
+
+def register_session(username, session_id, log_path):
     def _update(db):
         db[session_id] = {
-            'username':  username,
-            'log_path':  log_path,
-            'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'unit':      None,
-            'return_id': None,
+            "username": username,
+            "log_path": log_path,
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "unit": None,
+            "return_id": None
         }
     _db_update(_update)
-    print(f"[db] 登記 session={session_id} user={username}")
 
-def update_session_unit(session_id: str, unit: str):
+
+def update_session_unit(session_id, unit):
     def _update(db):
         if session_id in db:
-            db[session_id]['unit'] = unit
+            db[session_id]["unit"] = unit
     _db_update(_update)
-    print(f"[db] 更新 session={session_id} unit={unit}")
 
-def generate_return_id(session_id: str) -> str:
-    import random, string
-    result = {'rid': ''}
+
+def generate_return_id(session_id):
+    result = {"rid": ""}
 
     def _update(db):
-        existing = {v.get('return_id') for v in db.values()
-                    if isinstance(v, dict) and v.get('return_id')}
+        used = set()
+
+        for v in db.values():
+            if isinstance(v, dict):
+                rid = v.get("return_id")
+                if rid:
+                    used.add(rid)
+
         while True:
             rid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            if rid not in existing:
+            if rid not in used:
                 break
+
         if session_id in db:
-            db[session_id]['return_id'] = rid
-        if '__return_index__' not in db:
-            db['__return_index__'] = {}
-        db['__return_index__'][rid] = session_id
-        result['rid'] = rid
+            db[session_id]["return_id"] = rid
+
+        db.setdefault("__return_index__", {})
+        db["__return_index__"][rid] = session_id
+        result["rid"] = rid
 
     _db_update(_update)
-    print(f"[db] 產生 return_id={result['rid']} for session={session_id}")
-    return result['rid']
+    return result["rid"]
 
-def lookup_return_id(return_id: str) -> tuple[str | None, dict | None]:
-    """回傳 (session_id, record)"""
+
+def lookup_return_id(return_id):
     db = load_db()
-    index      = db.get('__return_index__', {})
-    session_id = index.get(return_id)
-    if session_id:
-        return session_id, db.get(session_id)
+    idx = db.get("__return_index__", {})
+    sid = idx.get(norm_sid(return_id))
+    if sid:
+        return sid, db.get(sid)
     return None, None
 
-def lookup_session(session_id: str) -> dict | None:
+
+def lookup_session(session_id):
+    """
+    強化版：
+    1. 可直接查 session_id
+    2. 若傳入 return_id，自動轉換
+    """
+    sid = norm_sid(session_id)
     db = load_db()
-    return db.get(session_id)
+
+    if sid in db:
+        return db[sid]
+
+    idx = db.get("__return_index__", {})
+    real_sid = idx.get(sid)
+
+    if real_sid:
+        return db.get(real_sid)
+
+    return None
 
 
-# ──────────────────────────────────────────
-# 工具
-# ──────────────────────────────────────────
-def write_log(log_path: str, content: str):
+def resolve_session_id(session_id):
+    """
+    回傳真正 session_id
+    """
+    sid = norm_sid(session_id)
+    db = load_db()
+
+    if sid in db:
+        return sid
+
+    idx = db.get("__return_index__", {})
+    return idx.get(sid, sid)
+
+
+def write_log(log_path, text):
     if not log_path:
         return
+
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(f"[{ts}] {content}\n")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {text}\n")
     except Exception as e:
-        print(f"[log 寫入失敗] {e}")
+        print("[log fail]", e)
 
-def launch_script(script: str, username: str, session_id: str, log_path: str):
+
+def launch_script(script, username, session_id, log_path):
     subprocess.Popen(
-        ['python', script,
-         '--username',   username,
-         '--session_id', session_id,
-         '--log_path',   log_path],
+        [
+            "python", script,
+            "--username", username,
+            "--session_id", session_id,
+            "--log_path", log_path
+        ],
         cwd=BASE_DIR
     )
 
@@ -175,444 +224,171 @@ def launch_script(script: str, username: str, session_id: str, log_path: str):
 # Routes
 # ──────────────────────────────────────────
 
-# ── /enter ──────────────────────────────
-@app.route('/enter', methods=['POST', 'OPTIONS'])
+@app.route("/enter", methods=["POST", "OPTIONS"])
 def enter():
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    data     = request.get_json() or {}
-    username = data.get('username', '').strip()
+    data = request.get_json() or {}
+    username = str(data.get("username", "")).strip()
 
     if not username:
-        return jsonify({'success': False, 'error': '名字不能為空'}), 400
+        return jsonify({"success": False, "error": "名字不能為空"}), 400
 
-    os.makedirs(LOG_DIR, exist_ok=True)
-    session_id  = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
+    session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+
     session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
     os.makedirs(session_dir, exist_ok=True)
-    log_path    = os.path.join(session_dir, f"{username}_{session_id}.txt")
 
-    open(log_path, 'a', encoding='utf-8').close()
+    log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+    open(log_path, "a", encoding="utf-8").close()
 
     register_session(username, session_id, log_path)
 
-    print(f"[enter] username={username} session_id={session_id}")
-    return jsonify({'success': True, 'session_id': session_id})
-
-
-# ── /enter_id ───────────────────────────
-@app.route('/enter_id', methods=['POST', 'OPTIONS'])
-def enter_id():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data      = request.get_json() or {}
-    return_id = data.get('return_id', '').strip().upper()
-
-    if not return_id:
-        return jsonify({'success': False, 'error': '請輸入 ID'}), 400
-
-    session_id, record = lookup_return_id(return_id)
-    if not record:
-        return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
-
-    username = record['username']
-    log_path = record['log_path']
-
-    write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
-    print(f"[enter_id] return_id={return_id} user={username} session={session_id}")
-
-    # 回傳原本的 session_id，供 greeting_set_que 查詢 unit
     return jsonify({
-        'success':    True,
-        'username':   username,
-        'session_id': session_id,
+        "success": True,
+        "session_id": session_id
     })
 
 
-# ── /greeting_set_que ───────────────────
-@app.route('/greeting_set_que', methods=['POST', 'OPTIONS'])
-def greeting_set_que():
-    if request.method == 'OPTIONS':
+@app.route("/enter_id", methods=["POST", "OPTIONS"])
+def enter_id():
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
+    data = request.get_json() or {}
+    return_id = norm_sid(data.get("return_id"))
+
+    if not return_id:
+        return jsonify({"success": False, "error": "請輸入 ID"}), 400
+
+    session_id, record = lookup_return_id(return_id)
+
+    if not record:
+        return jsonify({"success": False, "error": "未找到記錄"})
+
+    return jsonify({
+        "success": True,
+        "username": record["username"],
+        "session_id": session_id
+    })
+
+
+@app.route("/greeting_set_que", methods=["POST", "OPTIONS"])
+def greeting_set_que():
+    if request.method == "OPTIONS":
+        return Response(status=200)
+
+    data = request.get_json() or {}
+
+    username = str(data.get("username", "未知")).strip()
+    session_id = resolve_session_id(data.get("session_id"))
+
+    print("[greeting_set_que] raw =", data.get("session_id"))
+    print("[greeting_set_que] real=", session_id)
 
     record = lookup_session(session_id)
+
     if record:
-        log_path = record.get('log_path', '')
-        unit     = record.get('unit', '')
+        log_path = record.get("log_path", "")
+        unit = record.get("unit", "")
     else:
         session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
         os.makedirs(session_dir, exist_ok=True)
-        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
-        unit     = ''
 
-    script = 'true_ending.py' if unit == '出題' else 'va_set_que.py'
-    print("收到資料=", data)
-    print("session_id=", repr(session_id))
-    print("是否存在=", session_id in load_db())
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+        unit = ""
+
+    script = "true_ending.py" if unit == "出題" else "va_set_que.py"
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
+
         threading.Thread(
             target=launch_script,
             args=(script, username, session_id, log_path),
             daemon=True
         ).start()
-        print(f"[greeting_set_que] 啟動 {script}  session={session_id}  unit={unit}")
-    else:
-        print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
 
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
-    return jsonify({'reply': reply})
+        print("[launch]", script, session_id)
+
+    reply = "> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)"
+    return jsonify({"reply": reply})
 
 
-# ── /greeting_admin ─────────────────────
-@app.route('/greeting_admin', methods=['POST', 'OPTIONS'])
-def greeting_admin():
-    """Tempus_Aeternum 專用：直接啟動 admin.py"""
-    if request.method == 'OPTIONS':
+@app.route("/generate_return_id", methods=["POST", "OPTIONS"])
+def gen_return():
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
+    data = request.get_json() or {}
+    session_id = resolve_session_id(data.get("session_id"))
 
-    record = lookup_session(session_id)
-    if record:
-        log_path = record.get('log_path', '')
-    else:
-        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
-        os.makedirs(session_dir, exist_ok=True)
-        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
-
-    if session_id and session_id not in launched_sessions:
-        launched_sessions.add(session_id)
-        threading.Thread(
-            target=launch_script,
-            args=('admin.py', username, session_id, log_path),
-            daemon=True
-        ).start()
-        print(f"[greeting_admin] 啟動 admin.py  session={session_id}")
-    else:
-        print(f"[greeting_admin] session={session_id} 已啟動，跳過")
-
-    reply = '> 管理員模式初始化中，請稍候…'
-    return jsonify({'reply': reply})
-
-
-# ── /greeting ───────────────────────────
-@app.route('/greeting', methods=['POST', 'OPTIONS'])
-def greeting():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-
-    record = lookup_session(session_id)
-    if record:
-        log_path = record.get('log_path', '')
-    else:
-        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
-        os.makedirs(session_dir, exist_ok=True)
-        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
-
-    if session_id and session_id not in launched_sessions:
-        launched_sessions.add(session_id)
-        threading.Thread(
-            target=launch_script,
-            args=('button.py', username, session_id, log_path),
-            daemon=True
-        ).start()
-        print(f"[greeting] 啟動 button.py  session={session_id}")
-    else:
-        print(f"[greeting] session={session_id} 已啟動，跳過")
-
-    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
-    return jsonify({'reply': reply})
-
-
-# ── /generate_return_id ─────────────────
-@app.route('/generate_return_id', methods=['POST', 'OPTIONS'])
-def gen_return_id():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    rid        = generate_return_id(session_id)
-    return jsonify({'return_id': rid})
-
-
-# ── /lock_input ─────────────────────────
-@app.route('/lock_input', methods=['POST', 'OPTIONS'])
-def lock_input():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    locked     = data.get('locked', False)
-
-    if locked:
-        input_locked.add(session_id)
-    else:
-        input_locked.discard(session_id)
-
-    print(f"[lock_input] session={session_id} locked={locked}")
-    return jsonify({'success': True})
-
-
-# ── /update_unit ────────────────────────
-@app.route('/update_unit', methods=['POST', 'OPTIONS'])
-def update_unit():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    unit       = data.get('unit', '')
-
-    update_session_unit(session_id, unit)
-    return jsonify({'success': True})
-
-
-# ── /download ───────────────────────────
-@app.route('/download', methods=['GET', 'OPTIONS'])
-def download_file():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    from flask import send_file
-    file_path = request.args.get('path', '')
-
-    if not file_path:
-        return jsonify({'error': '未指定檔案路徑'}), 400
-
-    abs_path = os.path.abspath(file_path)
-    abs_log  = os.path.abspath(LOG_DIR)
-    if not abs_path.startswith(abs_log):
-        return jsonify({'error': '存取被拒絕'}), 403
-
-    if not os.path.exists(abs_path):
-        return jsonify({'error': '檔案不存在'}), 404
-
-    return send_file(abs_path, as_attachment=True,
-                     download_name=os.path.basename(abs_path))
-
-
-# ── /get_session_info ───────────────────
-@app.route('/get_session_info', methods=['GET', 'OPTIONS'])
-def get_session_info():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-    record     = lookup_session(session_id)
-    if not record:
-        return jsonify({'success': False, 'error': '找不到 session'}), 404
+    rid = generate_return_id(session_id)
 
     return jsonify({
-        'success':   True,
-        'username':  record.get('username', ''),
-        'unit':      record.get('unit', ''),
-        'return_id': record.get('return_id', ''),
+        "return_id": rid
     })
 
 
-# ── /push ───────────────────────────────
-@app.route('/push', methods=['POST', 'OPTIONS'])
-def push():
-    if request.method == 'OPTIONS':
+@app.route("/update_unit", methods=["POST", "OPTIONS"])
+def update_unit():
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    data       = request.get_json() or {}
-    text       = data.get('text', '').strip()
-    session_id = data.get('session_id', '')
-    log_path   = data.get('log_path', '')
+    data = request.get_json() or {}
+    session_id = resolve_session_id(data.get("session_id"))
+    unit = str(data.get("unit", "")).strip()
 
-    if not text:
-        return jsonify({'success': False}), 400
+    update_session_unit(session_id, unit)
 
-    message_queues[session_id].append(text)
-    print(f"[push] session={session_id} queue_len={len(message_queues[session_id])} text={text[:40]}")
-
-    return jsonify({'success': True})
+    return jsonify({"success": True})
 
 
-# ── /poll ───────────────────────────────
-@app.route('/poll', methods=['GET', 'OPTIONS'])
-def poll():
-    if request.method == 'OPTIONS':
+@app.route("/get_session_info", methods=["GET", "OPTIONS"])
+def get_session_info():
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    session_id  = request.args.get('session_id', '')
-    queue       = message_queues.get(session_id, [])
-    is_thinking = thinking_states.get(session_id, False)
+    session_id = resolve_session_id(request.args.get("session_id"))
+    record = lookup_session(session_id)
 
-    last_seen[session_id] = time.time()
+    if not record:
+        return jsonify({"success": False}), 404
 
-    if queue:
-        text = queue.pop(0)
-        print(f"[poll] session={session_id} 取出訊息 text={text[:40]}")
-        return jsonify({'message': text, 'thinking': False, 'input_locked': session_id in input_locked})
+    return jsonify({
+        "success": True,
+        "username": record.get("username", ""),
+        "unit": record.get("unit", ""),
+        "return_id": record.get("return_id", "")
+    })
 
-    return jsonify({'message': None, 'thinking': is_thinking, 'input_locked': session_id in input_locked})
 
-
-# ── /check_online ───────────────────────
-@app.route('/check_online', methods=['GET', 'OPTIONS'])
-def check_online():
-    if request.method == 'OPTIONS':
+@app.route("/download", methods=["GET", "OPTIONS"])
+def download():
+    if request.method == "OPTIONS":
         return Response(status=200)
 
-    session_id = request.args.get('session_id', '')
-    timeout    = float(request.args.get('timeout', USER_TIMEOUT))
-    seen       = last_seen.get(session_id)
+    file_path = request.args.get("path", "")
 
-    if seen is None or (time.time() - seen) > timeout:
-        return jsonify({'online': False})
-    return jsonify({'online': True})
+    if not file_path:
+        return jsonify({"error": "未指定檔案"}), 400
 
+    abs_path = os.path.abspath(file_path)
+    abs_log = os.path.abspath(LOG_DIR)
 
-# ── /check_interrupted ──────────────────
-@app.route('/check_interrupted', methods=['GET', 'OPTIONS'])
-def check_interrupted():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
+    if not abs_path.startswith(abs_log):
+        return jsonify({"error": "拒絕存取"}), 403
 
-    session_id = request.args.get('session_id', '')
+    if not os.path.exists(abs_path):
+        return jsonify({"error": "檔案不存在"}), 404
 
-    if session_id in interrupted_sessions:
-        interrupted_sessions.discard(session_id)
-        return jsonify({'interrupted': True})
-
-    return jsonify({'interrupted': False})
-
-
-# ── /thinking ───────────────────────────
-@app.route('/thinking', methods=['POST', 'OPTIONS'])
-def thinking():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    session_id = data.get('session_id', '')
-    state      = data.get('thinking', False)
-    thinking_states[session_id] = state
-    return jsonify({'success': True})
-
-
-# ── /button_click ───────────────────────
-@app.route('/button_click', methods=['POST', 'OPTIONS'])
-def button_click():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    message    = data.get('message', '').strip()
-    session_id = data.get('session_id', '')
-    username   = data.get('username', '未知').strip()
-
-    if not message:
-        return jsonify({'reply': ''}), 400
-
-    user_input_queues[session_id].append(message)
-    print(f"[button_click] session={session_id} message={message[:40]}")
-    return jsonify({'reply': ''})
-
-
-# ── /chat ───────────────────────────────
-@app.route('/chat', methods=['POST', 'OPTIONS'])
-def chat():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    message    = data.get('message', '').strip()
-    session_id = data.get('session_id', '')
-    username   = data.get('username', '未知').strip()
-
-    if not message:
-        return jsonify({'reply': ''}), 400
-
-    if session_id in input_locked:
-        print(f"[chat] session={session_id} 輸入框鎖定，忽略訊息: {message[:40]}")
-        return jsonify({'reply': ''})
-
-    user_input_queues[session_id].append(message)
-    print(f"[chat] session={session_id} message={message[:40]}")
-    return jsonify({'reply': ''})
-
-
-# ── /fetch_user_input ───────────────────
-@app.route('/fetch_user_input', methods=['GET', 'OPTIONS'])
-def fetch_user_input():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    session_id = request.args.get('session_id', '')
-    queue      = user_input_queues.get(session_id, [])
-
-    if queue:
-        msg = queue.pop(0)
-        print(f"[fetch_user_input] session={session_id} message={msg[:40]}")
-        return jsonify({'message': msg})
-
-    return jsonify({'message': None})
-
-
-# ── /log ────────────────────────────────
-@app.route('/log', methods=['POST', 'OPTIONS'])
-def log_message():
-    if request.method == 'OPTIONS':
-        return Response(status=200)
-
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
-    role       = data.get('role', 'unknown')
-    message    = data.get('message', '').strip()
-    timestamp  = data.get('timestamp', '')
-
-    if not message:
-        return jsonify({'success': False}), 400
-
-    log_path = os.path.join(LOG_DIR, f"{username}_{session_id}.txt")
-    record   = lookup_session(session_id)
-    if record and record.get('log_path'):
-        log_path = record['log_path']
-    else:
-        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
-        os.makedirs(session_dir, exist_ok=True)
-        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
-
-    label = '用戶' if role == 'user' else 'AI'
-
-    if not timestamp:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    try:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(f"[{timestamp}] {label}：{message}\n")
-    except Exception as e:
-        print(f"[log 寫入失敗] {e}")
-
-    return jsonify({'success': True})
+    return send_file(abs_path, as_attachment=True)
 
 
 # ──────────────────────────────────────────
 # 啟動
 # ──────────────────────────────────────────
-if __name__ == '__main__':
-    print("✅ name.py 伺服器啟動中...")
-    print(f"📁 Log 資料夾：{LOG_DIR}")
-    print(f"📋 Session 庫：{DB_PATH}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    print("server start")
+    app.run(host="0.0.0.0", port=5000, debug=False)
