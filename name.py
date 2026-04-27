@@ -35,26 +35,6 @@ interrupted_sessions = set()
 
 USER_TIMEOUT = 300
 
-# ──────────────────────────────────────────
-# 【新增】工具函式
-# ──────────────────────────────────────────
-def norm_sid(v):
-    return str(v or '').strip().upper()
-
-
-def resolve_session_id(session_id: str) -> str:
-    """
-    若收到的是 return_id，自動轉回真正 session_id
-    若本來就是 session_id，直接回傳
-    """
-    sid = norm_sid(session_id)
-    db = load_db()
-
-    if sid in db:
-        return sid
-
-    idx = db.get('__return_index__', {})
-    return idx.get(sid, sid)
 
 # ──────────────────────────────────────────
 # Session 庫（本地 JSON）
@@ -153,13 +133,13 @@ def generate_return_id(session_id: str) -> str:
     print(f"[db] 產生 return_id={result['rid']} for session={session_id}")
     return result['rid']
 
-def lookup_return_id(return_id: str):
+def lookup_return_id(return_id: str) -> dict | None:
     db = load_db()
     index = db.get('__return_index__', {})
-    session_id = index.get(norm_sid(return_id))
+    session_id = index.get(return_id)
     if session_id:
-        return session_id, db.get(session_id)
-    return None, None
+        return db.get(session_id)
+    return None
 
 def lookup_session(session_id: str) -> dict | None:
     db = load_db()
@@ -228,30 +208,27 @@ def enter_id():
         return Response(status=200)
 
     data      = request.get_json() or {}
-    return_id = norm_sid(data.get('return_id', ''))
+    return_id = data.get('return_id', '').strip().upper()
 
     if not return_id:
         return jsonify({'success': False, 'error': '請輸入 ID'}), 400
 
-    session_id, record = lookup_return_id(return_id)
-
+    record = lookup_return_id(return_id)
     if not record:
         return jsonify({'success': False, 'error': '未找到記錄，請聯絡助教。'})
 
     username = record['username']
     log_path = record['log_path']
 
-    write_log(
-        log_path,
-        f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}'
-    )
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
 
-    print(f"[enter_id] return_id={return_id} user={username} session={session_id}")
+    write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
+    print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
 
     return jsonify({
-        'success': True,
-        'username': username,
-        'session_id': session_id
+        'success':    True,
+        'username':   username,
+        'session_id': session_id,
     })
 
 
@@ -263,42 +240,24 @@ def greeting_set_que():
 
     data       = request.get_json() or {}
     username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
 
-    raw_sid    = data.get('session_id', '')
-    session_id = resolve_session_id(raw_sid)
-
-    print(f"[greeting_set_que] raw={raw_sid}")
-    print(f"[greeting_set_que] real={session_id}")
-
-    record = lookup_session(session_id)
-
+    record   = lookup_session(session_id)
     if record:
         log_path = record.get('log_path', '')
-        unit     = record.get('unit', '')
     else:
         session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
         os.makedirs(session_dir, exist_ok=True)
-
-        log_path = os.path.join(
-            session_dir,
-            f"{username}_{session_id}.txt"
-        )
-
-        unit = ''
-
-    script = 'true_ending.py' if unit == '出題' else 'va_set_que.py'
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
-
         threading.Thread(
             target=launch_script,
-            args=(script, username, session_id, log_path),
+            args=('va_set_que.py', username, session_id, log_path),
             daemon=True
         ).start()
-
-        print(f"[greeting_set_que] 啟動 {script} session={session_id}")
-
+        print(f"[greeting_set_que] 啟動 set_que.py  session={session_id}")
     else:
         print(f"[greeting_set_que] session={session_id} 已啟動，跳過")
 
