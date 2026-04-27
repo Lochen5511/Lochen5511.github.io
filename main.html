@@ -1127,8 +1127,9 @@
     await loadConfig();
     typingBubble = appendTyping();
     const mode  = params.get('mode') || '';
-    const route = mode === 'set_que' ? '/greeting_set_que'
-                : mode === 'admin'   ? '/greeting_admin'
+    const route = mode === 'set_que'     ? '/greeting_set_que'
+                : mode === 'admin'       ? '/greeting_admin'
+                : mode === 'true_ending' ? '/greeting_true_ending'
                 : '/greeting';
     try {
       const res  = await post_r(route, { username: userName, session_id: sessionId });

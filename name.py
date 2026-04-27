@@ -201,7 +201,7 @@ def enter():
     return jsonify({'success': True, 'session_id': session_id})
 
 
-# ── /enter_id ───────────────────────────
+# ── / ───────────────────────────
 @app.route('/enter_id', methods=['POST', 'OPTIONS'])
 def enter_id():
     if request.method == 'OPTIONS':
@@ -229,6 +229,7 @@ def enter_id():
         'success':    True,
         'username':   username,
         'session_id': session_id,
+        'unit':       record.get('unit', ''),
     })
 
 
@@ -264,6 +265,36 @@ def greeting_set_que():
     reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
     return jsonify({'reply': reply})
 
+@app.route('/greeting_true_ending', methods=['POST', 'OPTIONS'])
+def greeting_true_ending():
+    if request.method == 'OPTIONS':
+        return Response(status=200)
+
+    data       = request.get_json() or {}
+    username   = data.get('username', '未知').strip()
+    session_id = data.get('session_id', '')
+
+    record = lookup_session(session_id)
+    if record:
+        log_path = record.get('log_path', '')
+    else:
+        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
+        os.makedirs(session_dir, exist_ok=True)
+        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+
+    if session_id and session_id not in launched_sessions:
+        launched_sessions.add(session_id)
+        threading.Thread(
+            target=launch_script,
+            args=('true_ending.py', username, session_id, log_path),
+            daemon=True
+        ).start()
+        print(f"[greeting_true_ending] 啟動 true_ending.py  session={session_id}")
+    else:
+        print(f"[greeting_true_ending] session={session_id} 已啟動，跳過")
+
+    reply = '> 系統初始化中。\n(若在3分鐘內未跳出下一步，請重新開啟頁面)'
+    return jsonify({'reply': reply})
 
 # ── /greeting_admin ─────────────────────
 @app.route('/greeting_admin', methods=['POST', 'OPTIONS'])
