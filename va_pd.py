@@ -29,7 +29,7 @@ print(f"[va_pd.py] 啟動  user={username}  session={session_id}")
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
 N_TOTAL      = 30   # 模擬學生總數
-N_GROUP      = 8    # 高低分組人數
+N_GROUP      = 10    # 高低分組人數
 N_QUESTIONS  = 8    # 題目數
 CORRECT_ANS  = '1'  # AnswerMatrix 中 A=1, BCD=0
 
@@ -307,7 +307,7 @@ def main():
     matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
 
     send(
-        '你已完成 8 題命題，也拿到孿生班級的作答結果了。\n'
+        '你已完成 8 題命題，接下來你可以下載上面的作答分數記錄，或是點擊右邊的頁籤檢視詳細資料。\n'
         '接下來我們要做「審題」的事情，也就是用數據回頭檢討你每一題的品質。',
         delay=0.5
     )
@@ -320,9 +320,8 @@ def main():
 
     send(
         '然後再算鑑別度（D 值）：\n'
-        'A. 分高低分組（各 8 人）\n'
-        'B. D =（高分組答對人數 ÷ 8）−（低分組答對人數 ÷ 8）\n'
-        'D 值以 0.125 為刻度變動，這是正常的。',
+        'A. 分高低分組（各 10 人）\n'
+        'B. D =（高分組答對人數 ÷ 10）−（低分組答對人數 ÷ 10）\n',
         delay=0.5
     )
 
@@ -351,7 +350,7 @@ def main():
         if q_idx == 0:
             send(
                 f'你算出的第 {q_num} 題的(難度,鑑別度)是多少？\n'
-                f'用半形的括弧和逗點發送給我，只計算到小數點後第三位，不需要加入空格，也不要用全形的標點符號，'
+                f'用半形的括弧和逗點發送給我（例如，(1,0)），最多只計算到小數點後第三位，不需要加入空格，也不要用全形的標點符號，'
                 f'不然會視同錯誤',
                 delay=0.5
             )
