@@ -33,7 +33,7 @@ last_seen         = {}
 input_locked      = set()
 interrupted_sessions = set()
 
-USER_TIMEOUT = 1000
+USER_TIMEOUT = 300
 
 
 # ──────────────────────────────────────────
@@ -472,24 +472,50 @@ def push():
     return jsonify({'success': True})
 
 
-# ── /poll ───────────────────────────────
+# ── /poll（SSE 長連線）───────────────────
 @app.route('/poll', methods=['GET', 'OPTIONS'])
 def poll():
     if request.method == 'OPTIONS':
         return Response(status=200)
 
-    session_id  = request.args.get('session_id', '')
-    queue       = message_queues.get(session_id, [])
-    is_thinking = thinking_states.get(session_id, False)
+    session_id = request.args.get('session_id', '')
 
-    last_seen[session_id] = time.time()
+    def event_stream():
+        import json as _json
+        last_seen[session_id] = time.time()
+        while True:
+            last_seen[session_id] = time.time()
+            queue       = message_queues.get(session_id, [])
+            is_thinking = thinking_states.get(session_id, False)
+            locked      = session_id in input_locked
 
-    if queue:
-        text = queue.pop(0)
-        print(f"[poll] session={session_id} 取出訊息 text={text[:40]}")
-        return jsonify({'message': text, 'thinking': False, 'input_locked': session_id in input_locked})
+            if queue:
+                text = queue.pop(0)
+                print(f"[sse] session={session_id} 推送訊息 text={text[:40]}")
+                payload = _json.dumps({
+                    'message':     text,
+                    'thinking':    False,
+                    'input_locked': locked,
+                }, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+            else:
+                payload = _json.dumps({
+                    'message':     None,
+                    'thinking':    is_thinking,
+                    'input_locked': locked,
+                }, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+                time.sleep(1.0)
 
-    return jsonify({'message': None, 'thinking': is_thinking, 'input_locked': session_id in input_locked})
+    return Response(
+        event_stream(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control':               'no-cache',
+            'X-Accel-Buffering':           'no',
+            'Access-Control-Allow-Origin': '*',
+        }
+    )
 
 
 # ── /check_online ───────────────────────
@@ -640,7 +666,10 @@ def log_message():
 # 啟動
 # ──────────────────────────────────────────
 if __name__ == '__main__':
+    from waitress import serve
+
     print("✅ name.py 伺服器啟動中...")
     print(f"📁 Log 資料夾：{LOG_DIR}")
     print(f"📋 Session 庫：{DB_PATH}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    serve(app, host='0.0.0.0', port=5000, threads=120)
