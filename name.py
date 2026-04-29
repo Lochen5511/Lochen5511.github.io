@@ -33,7 +33,7 @@ last_seen         = {}
 input_locked      = set()
 interrupted_sessions = set()
 
-USER_TIMEOUT = 300
+USER_TIMEOUT = 1000
 
 
 # ──────────────────────────────────────────
@@ -511,7 +511,7 @@ def poll():
         event_stream(),
         mimetype='text/event-stream',
         headers={
-            'Cache-Control':               'no-cache',
+            'Cache-Control':               'no-cache, no-transform',
             'X-Accel-Buffering':           'no',
             'Access-Control-Allow-Origin': '*',
         }
