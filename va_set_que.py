@@ -2,15 +2,7 @@ import argparse
 import time
 import requests
 import os
-import openai
-from dotenv import load_dotenv
 from datetime import datetime
-
-# ──────────────────────────────────────────
-# 環境變數 & OpenAI
-# ──────────────────────────────────────────
-load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
-openai.api_key = os.getenv("AIKEY")
 
 # ──────────────────────────────────────────
 # 接收變數
@@ -25,10 +17,11 @@ username   = args.username
 session_id = args.session_id
 log_path   = args.log_path
 
-print(f"[que_ana.py] 啟動  user={username}  session={session_id}")
+print(f"[set_que.py] 啟動  user={username}  session={session_id}")
 
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
+TOTAL_QUE    = 8
 
 
 # ──────────────────────────────────────────
@@ -82,14 +75,34 @@ def send_buttons(labels, delay=0, colors=None, size='medium',
     _lock(True)
     print(f"[buttons] {labels}")
 
+def send_checkbox(options, max_select=2, checkbox_id='cb', delay=0):
+    """發送多選 checkbox 元件，max_select 為最多可勾選數量"""
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    parts = '||'.join(options)
+    _post('/push', {
+        'text': f'__CHECKBOX__{checkbox_id}||{max_select}||{parts}',
+        'username': username, 'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+    print(f"[checkbox] max={max_select} opts={options}")
+
+def send_dropdown(options, placeholder='請選擇…',
+                  dropdown_id='dropdown', delay=0):
+    if delay > 0:
+        _thinking(True); time.sleep(delay); _thinking(False)
+    parts = '||'.join(options)
+    _post('/push', {
+        'text': f'__DROPDOWN__{dropdown_id}||{placeholder}||{parts}',
+        'username': username, 'session_id': session_id, 'log_path': '',
+    })
+    _lock(True)
+    print(f"[dropdown] {options}")
+
 def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
     """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
-        interrupted = _get('/check_interrupted', {'session_id': session_id})
-        if interrupted.get('interrupted', False):
-            write_log('[中斷] 用戶輸入 ID，流程中斷')
-            return '__INTERRUPTED__'
-
+        # 優先取用戶輸入，減少延遲
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
@@ -97,15 +110,17 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
             print(f"[user] {msg[:60]}")
             return msg
 
+        interrupted = _get('/check_interrupted', {'session_id': session_id})
+        if interrupted.get('interrupted', False):
+            write_log('[中斷] 用戶輸入 ID，流程中斷')
+            return '__INTERRUPTED__'
+
         online = _get('/check_online', {'session_id': session_id, 'timeout': timeout})
         if not online.get('online', True):
             write_log('用戶已離開系統')
             return None
 
         time.sleep(interval)
-
-def is_exit(val):
-    return val is None or val == '__INTERRUPTED__'
 
 def write_log(content):
     """寫入後端結構化 log（含時間戳記）"""
@@ -118,266 +133,312 @@ def write_log(content):
     except Exception as e:
         print(f"[log 寫入失敗] {e}")
 
-def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
-    """呼叫 OpenAI，回傳回應文字"""
-    try:
-        response = openai.ChatCompletion.create(
-            model=model,
-            temperature=temperature,
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user',   'content': user_prompt},
-            ]
+def is_exit(val):
+    """統一檢查是否為離開或中斷"""
+    return val is None or val == '__INTERRUPTED__'
+
+
+# ──────────────────────────────────────────
+# 單題流程
+# ──────────────────────────────────────────
+def make_question(n, total, used_concepts):
+    ALL_CONCEPTS = [
+        '內容效度',
+        '表面效度',
+        '同時效度',
+        '預測效度',
+        '建構效度（因素分析／聚斂區別）',
+        '信度—效度關係（必要但不充分）',
+        '效標關聯效度',
+        '情境題',
+    ]
+
+    write_log(f'\n── 第 {n}/{total} 題開始 ──')
+
+    remaining_concepts = [c for c in ALL_CONCEPTS if c not in used_concepts]
+
+    if remaining_concepts:
+        send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
+        send_dropdown(
+            options     = remaining_concepts,
+            placeholder = '請選擇概念標籤…',
+            dropdown_id = f'dd_concept_{n}',
         )
-        return response.choices[0].message['content'].strip()
-    except Exception as e:
-        print(f"[OpenAI 失敗] {e}")
-        return None
+        concept = wait_for_user()
+        if is_exit(concept): return False
+    else:
+        send('接下來，請在聊天框輸入你想要用來命題的核心觀念。', delay=1)
+        concept = wait_for_user()
+        if is_exit(concept): return False
 
+    used_concepts.add(concept)
+    print(f"[set_que] 題{n} 概念={concept}")
 
-LOG_DIR      = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
-WIDE_TABLE   = os.path.join(LOG_DIR, 'validity_wide_table.csv')
-MAX_STUDENTS = 30
+    send((
+        '再來，請你寫出一個「看得懂、問得清楚」的題幹。'
+        '你可以先不用想選項，先把題幹寫出來就好。\n\n'
+        '如果你卡住，我給你三個很容易開始的題幹套路，選一個套進去就行：\n'
+        '・套路 A：證據判讀型\n'
+        '「老師用了___來檢核題目品質，這主要支持哪種效度證據？」\n\n'
+        '・套路 B：時間線索型（同時 vs 預測）\n'
+        '「測驗分數與___（當下／一年後）表現相關，這是哪種效度？」\n\n'
+        '・套路 C：推論型（信度≠效度）\n'
+        '「α很高／分數很穩定，能不能推論效度一定高？」\n\n'
+        '你想用哪一種？或你直接開始寫也可以。'
+        '一個完整的題幹，字數 ≥ 40 字，「2–4 句情境 + 1 句問句」'
+        '（請直接於聊天框輸入完整的題目。）'
+    ), delay=1)
 
-SYSTEM_PROMPT = """\
-請依據以下註釋與學生的認知數值，預測這個學生回答以下八題的答案，依據「A,A,A,A,A,A,A,A」的格式生成答案。
+    stem = wait_for_user()
+    if is_exit(stem): return False
+    print(f"[set_que] 題{n} 題幹={stem[:60]}")
 
-accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 8 題 → 0.75。
-avg_confidence = 所有題目的信心分數（1-5）加總 ÷ 題數。反映用戶對自己答案的整體把握程度。
-low_conf_ratio = 信心分數 ≤ 2 的題目數 ÷ 總題數。比例越高代表用戶越不確定自己的答案。
-high_conf_wrong_ratio = 信心分數 ≥ 4 但答錯的題目數 ÷ 總題數。這是最重要的指標之一，反映用戶「自信但錯誤」的程度，也就是迷思概念最強固的狀態。
-V1a = V_FACE_OVERUSE（用外觀直覺當主要效度證據）
-V1b = V_CONTENT_CRITERION_CONFUSE（把效標關聯/相關/預測的證據誤當內容效度或反之）
-V1c = V_RELIABILITY_AS_VALIDITY（把信度指標/α 當效度證據）
-V2a = V_CONCUR_PRED_SWAP（同時效度與預測效度顛倒）
-V2b = V_TIME_BLIND（忽略時間線索，只要看到「相關」就固定選某一類）
-X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不充分不懂/推反/否認關係）
-V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
-V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
+    send((
+        '對了，你希望作答的人從題幹中核心判斷的線索（題幹關鍵字）是什麼？\n'
+        '例如：「同一時間點」「一年後」「雙向細目表」「因素分析」「α很高」'
+    ), delay=1)
 
-只輸出答案，格式嚴格為「X,X,X,X,X,X,X,X」（8 個大寫字母，以逗號分隔），不要任何其他文字。\
-"""
+    clue = wait_for_user()
+    if is_exit(clue): return False
+    print(f"[set_que] 題{n} 線索={clue[:60]}")
 
+    write_log(f'[命題{n}] 概念={concept} | 題幹={stem} | 線索={clue}')
 
-def _acquire_lock(lock_path: str, timeout: float = 10.0) -> bool:
-    """等待 .lock 檔釋放後取得鎖"""
-    import time as _time
-    start = _time.time()
     while True:
-        try:
-            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(fd)
-            return True
-        except FileExistsError:
-            if _time.time() - start > timeout:
-                print(f"[wide_table] 鎖定逾時，強制繼續讀取")
-                return False
-            _time.sleep(0.05)
+        send((
+            '接下來，把你的四個選項寫出來，並且讓至少兩個錯選項「有意義」，'
+            '也就是能代表常見的錯誤想法。\n\n'
+            '小提示：如果你不知道錯選項怎麼寫，你可以考慮把正確概念改一個關鍵詞，'
+            '就會變成典型迷思。例如：把「當下」換成「一年後」。\n\n'
+            f'再看一次你的題幹：\n{stem}'
+        ), delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '需要修改'],
+            colors     = ['green', 'gray'],
+            size       = 'small',
+            button_ids = ['btn_stem_ok', 'btn_stem_edit']
+        )
+        stem_check = wait_for_user()
+        if is_exit(stem_check): return False
+        if 'btn_stem_ok' in stem_check:
+            break
+        send('請重新輸入題幹：', delay=0.5)
+        new_stem = wait_for_user()
+        if is_exit(new_stem): return False
+        stem = new_stem
+        write_log(f'[命題{n}] 題幹修改={stem}')
 
-def _release_lock(lock_path: str):
-    try:
-        os.remove(lock_path)
-    except: pass
+    send('請告訴我，你心中的正確答案：', delay=1)
+    answer = wait_for_user()
+    if is_exit(answer): return False
+    print(f"[set_que] 題{n} 正確答案={answer[:60]}")
 
-def load_wide_table() -> list:
-    import csv
-    lock_path = WIDE_TABLE + '.lock'
-    acquired  = _acquire_lock(lock_path)
-    rows = []
-    try:
-        with open(WIDE_TABLE, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                rows.append(row)
-        print(f"[wide_table] 讀取 {len(rows)} 筆")
-    except Exception as e:
-        print(f"[wide_table 讀取失敗] {e}")
-    finally:
-        if acquired:
-            _release_lock(lock_path)
-    return rows
+    send('接著，請依序輸入三個錯誤的選項。', delay=1)
 
+    wrong_options = []
+    for i in range(1, 4):
+        while True:
+            send(f'請輸入第 {i} 個錯誤選項：', delay=0.5)
+            wrong = wait_for_user()
+            if is_exit(wrong): return False
 
-def row_to_prompt(row: dict, questions: list) -> str:
-    stats = (
-        f"accuracy={row.get('accuracy','')}  "
-        f"avg_confidence={row.get('avg_confidence','')}  "
-        f"low_conf_ratio={row.get('low_conf_ratio','')}  "
-        f"high_conf_wrong_ratio={row.get('high_conf_wrong_ratio','')}\n"
-        f"V1a={row.get('V1a','')}  V1b={row.get('V1b','')}  V1c={row.get('V1c','')}  "
-        f"V2a={row.get('V2a','')}  V2b={row.get('V2b','')}  X1={row.get('X1','')}  "
-        f"V3a={row.get('V3a','')}  V3b={row.get('V3b','')}"
+            send(f'你輸入的第 {i} 個錯誤選項是：\n{wrong}', delay=0.5)
+            send_buttons(
+                labels     = ['確認無誤', '我想修改'],
+                colors     = ['green', 'gray'],
+                size       = 'small',
+                button_ids = ['btn_confirm', 'btn_edit']
+            )
+            confirm = wait_for_user()
+            if is_exit(confirm): return False
+
+            if 'btn_confirm' in confirm:
+                wrong_options.append(wrong)
+                write_log(f'[命題{n}] 錯誤選項{i}={wrong}')
+                break
+
+    while True:
+        full_question = (
+            f'以下是你完成的題目：\n\n'
+            f'【題幹】\n{stem}\n\n'
+            f'A. {answer}\n'
+            f'B. {wrong_options[0]}\n'
+            f'C. {wrong_options[1]}\n'
+            f'D. {wrong_options[2]}\n\n'
+            f'（A 為正確答案）'
+        )
+        send(full_question, delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '我想修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_final_confirm', 'btn_final_edit']
+        )
+        final = wait_for_user()
+        if is_exit(final): return False
+
+        if 'btn_final_confirm' in final:
+            write_log(f'[命題{n}完成] stem={stem} | A={answer} | B={wrong_options[0]} | C={wrong_options[1]} | D={wrong_options[2]}')
+            break
+
+        send('請發送完整的題幹：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        stem = v
+
+        send('請發送正確選項：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        answer = v
+
+        send('請發送錯誤選項（B）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[0] = v
+
+        send('請發送錯誤選項（C）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[1] = v
+
+        send('請發送錯誤選項（D）：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        wrong_options[2] = v
+
+    send((
+        '接下來我想請你挑出兩個「最容易讓人選錯」的選項。\n'
+        '你不用挑全部，只要挑兩個就好。'
+    ), delay=1)
+
+    send_checkbox(
+        options     = [
+            f'B. {wrong_options[0]}',
+            f'C. {wrong_options[1]}',
+            f'D. {wrong_options[2]}',
+        ],
+        max_select  = 2,
+        checkbox_id = f'cb_pick_{n}',
     )
-    ques = '\n'.join(
-        f"題{i+1}：{q['stem']}\n選項：{', '.join(f'{k}. {v}' for k, v in q['options'].items())}"
-        for i, q in enumerate(questions)
-    )
-    return f"學生數值：\n{stats}\n\n題目：\n{ques}"
 
+    first_pick = wait_for_user()
+    if is_exit(first_pick): return False
+    first_raw    = first_pick.replace('cb_first:', '').strip()
+    first_label  = first_raw
+    first_option = first_raw.split('. ', 1)[-1] if '. ' in first_raw else first_raw
 
-def save_answer_matrix(answers: list, questions: list):
-    import csv
-    session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
-    out_path    = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+    _lock(True)
+    second_pick = wait_for_user()
+    if is_exit(second_pick): return False
+    second_raw    = second_pick.replace('cb_second:', '').strip()
+    second_label  = second_raw
+    second_option = second_raw.split('. ', 1)[-1] if '. ' in second_raw else second_raw
 
-    correct_answers = ['A'] * 8
-
-    header = [f'Q{i+1}' for i in range(8)] + ['Total']
-    try:
-        with open(out_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            # 第一列：欄位標題
-            writer.writerow(header)
-            # 每個學生的作答（A=1, BCD=0）與總分
-            for row in answers:
-                binary = [1 if ans == 'A' else 0 for ans in row[:8]]
-                score  = sum(binary)
-                writer.writerow(binary + [score])
-        print(f"[AnswerMatrix] 已儲存：{out_path}（{len(answers)} 筆）")
-        write_log(f'[que_ana] AnswerMatrix 已儲存：{out_path}')
-    except Exception as e:
-        print(f"[AnswerMatrix 儲存失敗] {e}")
-    return out_path
-
-
-def parse_questions_from_log() -> list:
-    questions = []
-    if not log_path or not os.path.exists(log_path):
-        print(f"[parse] log 不存在：{log_path}")
-        return questions
-    try:
-        with open(log_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                if '[命題' not in line or '完成]' not in line:
-                    continue
-                stripped = line.strip()
-                if stripped.startswith('[') and '] ' in stripped:
-                    stripped = stripped.split('] ', 1)[-1]
-                body  = stripped.split(']', 1)[-1].strip()
-                parts = {p.split('=', 1)[0].strip(): p.split('=', 1)[1].strip()
-                         for p in body.split('|') if '=' in p}
-                if all(k in parts for k in ('stem', 'A', 'B', 'C', 'D')):
-                    questions.append({
-                        'stem':    parts['stem'],
-                        'options': {
-                            'A': parts['A'],
-                            'B': parts['B'],
-                            'C': parts['C'],
-                            'D': parts['D'],
-                        }
-                    })
-    except Exception as e:
-        print(f"[parse log 失敗] {e}")
-    print(f"[parse] 解析到 {len(questions)} 題")
-    return questions
-
-
-def main():
-    rows = load_wide_table()
-    if not rows:
-        send('（孿生學生資料讀取失敗，請聯絡助教。）')
-        return
-
-    target_rows = rows[:MAX_STUDENTS]
-    total       = len(target_rows)
-    print(f"[que_ana] 將生成 {total} 筆孿生答案")
-
-    questions = parse_questions_from_log()
-    if len(questions) < 8:
-        send(f'（題目解析失敗，僅讀到 {len(questions)} 題，請聯絡助教。）')
-        return
-
-    send('孿生 AI 學生正在作答中，請稍候…', delay=1)
-    _thinking(True)
-
-    def _call_one(idx_row):
-        idx, row = idx_row
-        user_prompt = row_to_prompt(row, questions)
-        reply       = ask_openai(SYSTEM_PROMPT, user_prompt, temperature=0.3)
-        return idx, reply
-
-    all_answers = []
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(_call_one, (idx, row)): idx
-                   for idx, row in enumerate(target_rows)}
-        results_map = {}
-        for future in as_completed(futures):
-            idx, reply = future.result()
-            if not reply:
-                print(f"[que_ana] 第 {idx+1} 筆 OpenAI 無回應，跳過")
-                continue
-            parts = [p.strip().upper() for p in reply.split(',')]
-            if len(parts) == 8 and all(p in 'ABCD' for p in parts):
-                results_map[idx] = parts
-                print(f"[que_ana] 第 {idx+1} 筆：{parts}")
-            else:
-                print(f"[que_ana] 第 {idx+1} 筆格式異常，跳過：{reply}")
-
-    # 依原始順序排列
-    all_answers = [results_map[i] for i in sorted(results_map.keys())]
-
-    _thinking(False)
-
-    if not all_answers:
-        send('（孿生學生作答失敗，請聯絡助教。）')
-        return
-
-    save_answer_matrix(all_answers, questions)
-
-    import json
-    correct_answers = ['A'] * 8
-    stats = {}
-    for q_idx in range(8):
-        key    = f'Q{q_idx+1}'
-        counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
-        for row in all_answers:
-            ans = row[q_idx] if q_idx < len(row) else None
-            if ans in counts:
-                counts[ans] += 1
-        stats[key] = counts
-
-    # 計算每個學生的成績
-    students = []
-    for i, row in enumerate(all_answers):
-        score = sum(1 for q_idx, ans in enumerate(row)
-                    if q_idx < 8 and ans == correct_answers[q_idx])
-        students.append({'id': i + 1, 'answers': row, 'score': score})
-
-    push_data = json.dumps({
-        'type':       'answer_matrix',
-        'stats':      stats,
-        'n_students': len(all_answers),
-        'students':   students,
-        'correct':    correct_answers,
-    }, ensure_ascii=False)
-    _post('/push', {
-        'text':       f'__DATA__{push_data}',
-        'username':   username,
-        'session_id': session_id,
-        'log_path':   '',
-    })
-    print(f"[que_ana] 已 push 統計資料到前端")
-
-    session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
-    matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+    write_log(f'[命題{n}] 易錯選項1={first_label} | 易錯選項2={second_label}')
 
     send(
-        f'孿生 AI 學生作答完成！共生成 {len(all_answers)} 份答案。\n'
-        f'__LINK__{matrix_path}||AnswerMatrix.csv',
+        f'好，那我們先看「{first_option}」。\n'
+        '如果有人選了它，你猜他最可能是怎麼想的？',
         delay=1
     )
-    write_log(f'[que_ana] 完成，共 {len(all_answers)} 筆答案')
-    print("[que_ana.py] 執行完畢")
+    guess_first = wait_for_user()
+    if is_exit(guess_first): return False
+    write_log(f'[命題{n}] 易錯推測1={guess_first}')
 
-    import sys
+    send(
+        f'再來看「{second_option}」。\n'
+        '你覺得選它的人最可能是哪種想法搞錯？',
+        delay=1
+    )
+    guess_second = wait_for_user()
+    if is_exit(guess_second): return False
+    write_log(f'[命題{n}] 易錯推測2={guess_second}')
+
+    while True:
+        summary = (
+            f'以下是你分析的兩個易錯選項：\n\n'
+            f'【{first_label}】\n推測想法：{guess_first}\n\n'
+            f'【{second_label}】\n推測想法：{guess_second}'
+        )
+        send(summary, delay=1)
+        send_buttons(
+            labels     = ['正確無誤', '我想修改'],
+            colors     = ['green', 'gray'],
+            size       = 'medium',
+            button_ids = ['btn_guess_confirm', 'btn_guess_edit']
+        )
+        confirm = wait_for_user()
+        if is_exit(confirm): return False
+
+        if 'btn_guess_confirm' in confirm:
+            write_log(f'[命題{n}] 易錯分析確認完成')
+            break
+
+        send(f'請重新輸入「{first_label}」的易錯推測：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        guess_first = v
+
+        send(f'請重新輸入「{second_label}」的易錯推測：', delay=0.5)
+        v = wait_for_user()
+        if is_exit(v): return False
+        guess_second = v
+
+        write_log(f'[命題{n}] 易錯推測修改 | 1={guess_first} | 2={guess_second}')
+
+    return True
+
+
+# ──────────────────────────────────────────
+# 主要執行區塊
+# ──────────────────────────────────────────
+def main():
+    send((
+        f'嗨，{username}歡迎回來。我們進到下一步了。\n'
+        '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
+        '我會用三個小關卡帶你走。\n'
+        '你不用一次就寫得很完美，只要一關一關完成就好。'
+    ), delay=1)
+
+    send_buttons(
+        labels     = ['開始命題'],
+        colors     = ['gold'],
+        size       = 'medium',
+        button_ids = ['btn_start_que']
+    )
+
+    user_reply = wait_for_user()
+    if is_exit(user_reply):
+        return
+
+    used_concepts = set()
+    for n in range(1, TOTAL_QUE + 1):
+        if n > 1:
+            remaining = TOTAL_QUE - (n - 1)
+            send((
+                f'接著，請再出 {remaining} 題'
+                f'（我們總共要出 {TOTAL_QUE} 題），'
+                f'讓我們繼續出第 {n} 題。'
+            ), delay=1)
+
+        ok = make_question(n, TOTAL_QUE, used_concepts)
+        if not ok:
+            print(f"[set_que.py] 第 {n} 題中斷，結束流程")
+            return
+
+    send(
+        '很好，現在你已經完成命題，讓我召喚「孿生AI學生」來試做你的題目吧！',
+        delay=1
+    )
+
     import subprocess
     base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
     subprocess.Popen(
-        [sys.executable, 'va_pd.py'] + base_args,
+        ['python', 'va_que_ana.py'] + base_args,
         cwd=os.path.dirname(os.path.abspath(__file__))
     )
-    print("[que_ana.py] 已啟動 va_pd.py")
+
+    print("[set_que.py] 全部 8 題完成，已啟動 que_ana.py")
 
 
 if __name__ == '__main__':
