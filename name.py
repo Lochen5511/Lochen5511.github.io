@@ -640,7 +640,10 @@ def log_message():
 # 啟動
 # ──────────────────────────────────────────
 if __name__ == '__main__':
+    from waitress import serve
+
     print("✅ name.py 伺服器啟動中...")
     print(f"📁 Log 資料夾：{LOG_DIR}")
     print(f"📋 Session 庫：{DB_PATH}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    serve(app, host='0.0.0.0', port=5000, threads=16)
