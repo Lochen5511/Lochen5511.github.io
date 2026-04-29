@@ -1024,7 +1024,7 @@
       post('/button_click', {
         message: `cb_second:${chosen[1]}`, username: userName, session_id: sessionId,
       });
-    }, 300);
+    }, 1000);
   }
 
   function confirmDropdown(ddId) {
@@ -1120,7 +1120,7 @@
       sendBtn.disabled  = locked;
       input.placeholder = locked ? '請點擊上方按鈕作答…' : '輸入訊息…';
     } catch(e) { console.warn('[poll]', e.message); }
-  }, 300);
+  }, 1000);
 
   /* ── Greeting ── */
   window.addEventListener('load', async () => {
