@@ -20,7 +20,7 @@ log_path   = args.log_path
 print(f"[set_que.py] 啟動  user={username}  session={session_id}")
 
 BACKEND      = 'http://localhost:5000'
-USER_TIMEOUT = 300
+USER_TIMEOUT = 1000
 TOTAL_QUE    = 8
 
 

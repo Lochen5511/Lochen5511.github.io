@@ -33,7 +33,7 @@ last_seen         = {}
 input_locked      = set()
 interrupted_sessions = set()
 
-USER_TIMEOUT = 300
+USER_TIMEOUT = 1000
 
 
 # ──────────────────────────────────────────

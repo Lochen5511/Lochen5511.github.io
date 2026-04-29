@@ -27,7 +27,7 @@ log_path   = args.log_path
 print(f"[va_pd.py] 啟動  user={username}  session={session_id}")
 
 BACKEND      = 'http://localhost:5000'
-USER_TIMEOUT = 300
+USER_TIMEOUT = 1000
 N_TOTAL      = 30   # 模擬學生總數
 N_GROUP      = 8    # 高低分組人數
 N_QUESTIONS  = 8    # 題目數
