@@ -140,7 +140,7 @@ WIDE_TABLE   = os.path.join(LOG_DIR, 'validity_wide_table.csv')
 MAX_STUDENTS = 30
 
 SYSTEM_PROMPT = """\
-請依據以下註釋與學生的認知數值，預測這個學生回答以下八題的答案，依據「A,A,A,A,A,A,A,A」的格式生成答案。
+請依據以下註釋與學生的認知數值，預測這個學生回答以下八題的答案，依據「?,?,?,?,?,?,?,?」的格式生成答案。
 
 accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 8 題 → 0.75。
 avg_confidence = 所有題目的信心分數（1-5）加總 ÷ 題數。反映用戶對自己答案的整體把握程度。
