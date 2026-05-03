@@ -28,10 +28,10 @@ print(f"[va_pd.py] 啟動  user={username}  session={session_id}")
 
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
-N_TOTAL      = 30   # 模擬學生總數
-N_GROUP      = 10    # 高低分組人數
-N_QUESTIONS  = 8    # 題目數
-CORRECT_ANS  = '1'  # AnswerMatrix 中 A=1, BCD=0
+N_TOTAL      = 30
+N_GROUP      = 10
+N_QUESTIONS  = 8
+CORRECT_ANS  = '1'
 
 
 # ──────────────────────────────────────────
@@ -61,7 +61,6 @@ def is_exit(val) -> bool:
     return val is None or val == '__INTERRUPTED__'
 
 def parse_btn(val: str) -> str:
-    """前端按鈕回傳格式為 'ID:label'，取冒號前的 ID。"""
     return val.split(':')[0] if val and ':' in val else val
 
 def write_log(content: str):
@@ -134,9 +133,6 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
 # 讀取 AnswerMatrix
 # ──────────────────────────────────────────
 def load_answer_matrix() -> list:
-    """
-    讀取 AnswerMatrix.csv，回傳每個學生的作答列表（不含標題列和正確答案列）。
-    """
     session_dir = os.path.dirname(log_path) if log_path else '.'
     matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
 
@@ -150,9 +146,6 @@ def load_answer_matrix() -> list:
             reader = csv.reader(f)
             rows   = list(reader)
 
-        # 第一列：標題（Q1~Q8, 總分）
-        # 第二列：正確答案
-        # 第三列起：學生作答
         for row in rows[1:]:
             if len(row) >= N_QUESTIONS:
                 answers.append(row[:N_QUESTIONS])
@@ -167,13 +160,6 @@ def load_answer_matrix() -> list:
 # 計算難度與鑑別度
 # ──────────────────────────────────────────
 def calc_pd(answers: list) -> dict:
-    """
-    計算每題的難度（P）與鑑別度（D）。
-    回傳格式：{
-        'Q1': {'p': 0.8, 'd': 0.5, 'correct': 24},
-        ...
-    }
-    """
     n = len(answers)
     if n == 0:
         return {}
@@ -207,25 +193,14 @@ def calc_pd(answers: list) -> dict:
     return result
 
 
-
-
 # ──────────────────────────────────────────
-# 生成四選一按鈕選項（含正解與干擾）
+# 寄送 email
 # ──────────────────────────────────────────
-def make_question_choices(correct_q_idx: int) -> tuple:
+def _send_result_email(to_addr, username, return_id, pd_result, user_pd_results):
     """
-    顯示全部 8 題，回傳 (labels, button_ids, correct_button_id)。
+    寄送難度鑑別度結果至學生信箱。
+    user_pd_results: dict，格式 {'Q1': {'user_p': ..., 'user_d': ..., 'correct': bool}, ...}
     """
-    labels     = [f'第 {q + 1} 題' for q in range(N_QUESTIONS)]
-    button_ids = [f'Q{q + 1}'      for q in range(N_QUESTIONS)]
-    correct_id = f'Q{correct_q_idx + 1}'
-
-    return labels, button_ids, correct_id
-
-
-
-def _send_result_email(to_addr, username, return_id, pd_result):
-    """寄送難度鑑別度結果至學生信箱"""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -240,22 +215,28 @@ def _send_result_email(to_addr, username, return_id, pd_result):
         return False
 
     def d_label(d):
-        if d >= 0.4:   return '優異'
+        if d >= 0.4:    return '優異'
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
-    table_lines = ['題目 | 難度 P | 鑑別度 D | 評價']
-    table_lines.append('-' * 32)
+    # 表格：正確答案 + 學生作答 + 是否答對
+    table_lines = ['題目 | 難度 P | 鑑別度 D | 評價 | 你的作答 | 是否答對']
+    table_lines.append('-' * 52)
     for q_key, val in pd_result.items():
+        ur      = user_pd_results.get(q_key, {})
+        user_p  = ur.get('user_p', '—')
+        user_d  = ur.get('user_d', '—')
+        correct = '✓' if ur.get('correct', False) else '✗'
         table_lines.append(
-            f"{q_key}   | {val['p']}   | {val['d']}   | {d_label(val['d'])}"
+            f"{q_key}   | {val['p']}   | {val['d']}   | {d_label(val['d'])} "
+            f"| ({user_p},{user_d}) | {correct}"
         )
     table_str = '\n'.join(table_lines)
 
     subject = '孿生AI出題測試結果'
     body = (
         f'{username} 你好，\n\n'
-        f'以下是你出題的難度與鑑別度分析結果：\n\n'
+        f'以下是你出題的難度與鑑別度分析結果，以及你的作答紀錄：\n\n'
         f'{table_str}\n\n'
         f'你的下次學習代碼為：{return_id}\n'
         f'下次登入時，請於登入介面輸入此代碼進入下一階段。'
@@ -284,14 +265,9 @@ def _send_result_email(to_addr, username, return_id, pd_result):
 
 
 # ──────────────────────────────────────────
-# 主要執行區塊
+# 解析 (p,d) 輸入
 # ──────────────────────────────────────────
 def parse_pd_input(text: str):
-    """
-    解析用戶輸入的 (p,d) 格式。
-    成功回傳 (p_str, d_str)，失敗回傳 None。
-    只接受半形括弧、半形逗點、無空格。
-    """
     t = text.strip()
     if not (t.startswith('(') and t.endswith(')')):
         return None
@@ -302,6 +278,9 @@ def parse_pd_input(text: str):
     return (parts[0], parts[1])
 
 
+# ──────────────────────────────────────────
+# 主要執行區塊
+# ──────────────────────────────────────────
 def main():
     session_dir = os.path.dirname(log_path) if log_path else '.'
     matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
@@ -327,20 +306,20 @@ def main():
 
     send('先從第一題開始吧。', delay=0.5)
 
-    # 讀取 AnswerMatrix
     answers = load_answer_matrix()
     if not answers:
         send('（無法讀取作答資料，請聯絡助教。）', delay=0.5)
         return
 
-    # 計算難度與鑑別度
     _thinking(True)
     time.sleep(1)
     _thinking(False)
     pd_result = calc_pd(answers)
     write_log(f'[va_pd] 難度鑑別度計算完成：{pd_result}')
 
-    # ── 逐題驗證 ──────────────────────────────
+    # ── 逐題驗證，同時記錄學生作答 ──────────────
+    user_pd_results = {}   # {'Q1': {'user_p': ..., 'user_d': ..., 'correct': bool}, ...}
+
     for q_idx in range(N_QUESTIONS):
         q_num = q_idx + 1
         q_key = f'Q{q_num}'
@@ -362,15 +341,27 @@ def main():
         if is_exit(user_input):
             return
 
-        parsed = parse_pd_input(user_input)
+        parsed       = parse_pd_input(user_input)
         user_correct = False
+        user_p_val   = '—'
+        user_d_val   = '—'
+
         if parsed:
+            user_p_val = parsed[0]
+            user_d_val = parsed[1]
             try:
                 user_p = float(parsed[0])
                 user_d = float(parsed[1])
                 user_correct = (user_p == correct_p and user_d == correct_d)
             except ValueError:
                 pass
+
+        # 記錄該題作答結果
+        user_pd_results[q_key] = {
+            'user_p':  user_p_val,
+            'user_d':  user_d_val,
+            'correct': user_correct,
+        }
 
         if user_correct:
             send(f'第 {q_num} 題答對了！', delay=0.3)
@@ -383,25 +374,33 @@ def main():
             )
             write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解=({correct_p},{correct_d})')
 
-    # ── 發送難度鑑別度總表 ────────────────────
+    # ── 發送難度鑑別度總表（含學生作答與是否正確）──
     def d_label(d):
-        if d >= 0.4:
-            return '優異'
-        elif d >= 0.25:
-            return '正常'
-        else:
-            return '待加強'
+        if d >= 0.4:    return '優異'
+        elif d >= 0.25: return '正常'
+        else:           return '待加強'
 
     table_lines = ['各題難度與鑑別度總覽：\n']
-    table_lines.append('題目｜難度 P｜鑑別度 D｜評價')
-    table_lines.append('─' * 28)
+    table_lines.append('題目｜難度 P｜鑑別度 D｜評價｜你的作答｜是否答對')
+    table_lines.append('─' * 40)
     for q_key, val in pd_result.items():
-        label = d_label(val['d'])
+        ur      = user_pd_results.get(q_key, {})
+        user_p  = ur.get('user_p', '—')
+        user_d  = ur.get('user_d', '—')
+        correct = '✓' if ur.get('correct', False) else '✗'
+        label   = d_label(val['d'])
         table_lines.append(
-            f'{q_key}　｜{val["p"]}　｜{val["d"]}　｜{label}'
+            f'{q_key}　｜{val["p"]}　｜{val["d"]}　｜{label}｜({user_p},{user_d})｜{correct}'
         )
     send('\n'.join(table_lines), delay=0.5)
-    write_log('[va_pd] 發送難度鑑別度總表')
+    write_log('[va_pd] 發送難度鑑別度總表（含學生作答）')
+
+    # 將每題作答結果寫入 log
+    for q_key, ur in user_pd_results.items():
+        write_log(
+            f'[va_pd] {q_key} 作答=({ur["user_p"]},{ur["user_d"]}) '
+            f'正確={ur["correct"]}'
+        )
 
     # ── 產生 Return ID ────────────────────────
     rid = None
@@ -454,10 +453,11 @@ def main():
             break
 
     success = _send_result_email(
-        to_addr   = student_email,
-        username  = username,
-        return_id = rid or '',
-        pd_result = pd_result,
+        to_addr         = student_email,
+        username        = username,
+        return_id       = rid or '',
+        pd_result       = pd_result,
+        user_pd_results = user_pd_results,   # ← 新增
     )
 
     if success:
