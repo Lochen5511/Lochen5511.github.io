@@ -350,8 +350,8 @@ def main():
             user_p_val = parsed[0]
             user_d_val = parsed[1]
             try:
-                user_p = float(parsed[0])
-                user_d = float(parsed[1])
+                user_p = round(float(parsed[0]), 3)
+                user_d = round(float(parsed[1]), 3)
                 user_correct = (user_p == correct_p and user_d == correct_d)
             except ValueError:
                 pass
@@ -380,17 +380,39 @@ def main():
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
+    def _col(text, width):
+        """填滿至指定半形寬度（中文字算2個半形）"""
+        s = str(text)
+        cjk = sum(1 for c in s if ord(c) > 0x2E7F)
+        display_w = len(s) + cjk
+        return s + ' ' * max(0, width - display_w)
+
+    W = {'q': 4, 'p': 7, 'd': 7, 'label': 8, 'ans': 12, 'ok': 5}
+
     table_lines = ['各題難度與鑑別度總覽：\n']
-    table_lines.append('題目｜難度 P｜鑑別度 D｜評價｜你的作答｜是否答對')
-    table_lines.append('─' * 40)
+    table_lines.append(
+        _col('題目',   W['q'])     + '  ' +
+        _col('難度P',  W['p'])     + '  ' +
+        _col('鑑別度D',W['d'])     + '  ' +
+        _col('評價',   W['label']) + '  ' +
+        _col('你的作答',W['ans'])  + '  ' +
+        '是否答對'
+    )
+    table_lines.append('─' * 52)
     for q_key, val in pd_result.items():
         ur      = user_pd_results.get(q_key, {})
         user_p  = ur.get('user_p', '—')
         user_d  = ur.get('user_d', '—')
         correct = '✓' if ur.get('correct', False) else '✗'
         label   = d_label(val['d'])
+        ans_str = f'({user_p},{user_d})'
         table_lines.append(
-            f'{q_key}　｜{val["p"]}　｜{val["d"]}　｜{label}｜({user_p},{user_d})｜{correct}'
+            _col(q_key,    W['q'])     + '  ' +
+            _col(val['p'], W['p'])     + '  ' +
+            _col(val['d'], W['d'])     + '  ' +
+            _col(label,    W['label']) + '  ' +
+            _col(ans_str,  W['ans'])   + '  ' +
+            correct
         )
     send('\n'.join(table_lines), delay=0.5)
     write_log('[va_pd] 發送難度鑑別度總表（含學生作答）')
