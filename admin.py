@@ -103,8 +103,8 @@ def load_test_data() -> tuple:
                 if not line or line.startswith('#'):
                     continue
 
-                # 去掉時間戳記（若有）
-                if line.startswith('[') and '] ' in line:
+                # 去掉時間戳記（若有，格式為 [YYYY-MM-DD HH:MM:SS]）
+                if re.match(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ', line):
                     _, line = line.split('] ', 1)
                     line = line.strip()
 

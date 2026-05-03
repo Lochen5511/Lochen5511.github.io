@@ -1,4 +1,5 @@
 import argparse
+import re
 import time
 import requests
 import os
@@ -154,7 +155,6 @@ V2b = V_TIME_BLIND（忽略時間線索，只要看到「相關」就固定選�
 X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不充分不懂/推反/否認關係）
 V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
-所有迷思值會在0~1之間波動，數字越高，迷思越強，學生就越有該迷思。
 
 只輸出答案，格式嚴格為「X,X,X,X,X,X,X,X」（8 個大寫字母，以逗號分隔），不要任何其他文字。\
 """
@@ -227,9 +227,10 @@ def load_que_set_log() -> dict:
                 if not line or line.startswith('#'):
                     continue
 
-                # 去掉時間戳記 [YYYY-MM-DD HH:MM:SS]
-                if line.startswith('[') and '] ' in line:
+                # 去掉時間戳記（若有，格式為 [YYYY-MM-DD HH:MM:SS]）
+                if re.match(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ', line):
                     _, line = line.split('] ', 1)
+                    line = line.strip()
 
                 # 偵測 [QN_START]
                 if line.startswith('[Q') and line.endswith('_START]'):
