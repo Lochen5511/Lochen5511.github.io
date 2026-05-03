@@ -23,6 +23,11 @@ BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
 TOTAL_QUE    = 8
 
+LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+
+# que_set_log 路徑（全域，init_que_log() 設定後使用）
+que_log_path = ''
+
 
 # ──────────────────────────────────────────
 # 工具函數
@@ -76,7 +81,6 @@ def send_buttons(labels, delay=0, colors=None, size='medium',
     print(f"[buttons] {labels}")
 
 def send_checkbox(options, max_select=2, checkbox_id='cb', delay=0):
-    """發送多選 checkbox 元件，max_select 為最多可勾選數量"""
     if delay > 0:
         _thinking(True); time.sleep(delay); _thinking(False)
     parts = '||'.join(options)
@@ -100,9 +104,7 @@ def send_dropdown(options, placeholder='請選擇…',
     print(f"[dropdown] {options}")
 
 def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
-    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
-        # 優先取用戶輸入，減少延遲
         data = _get('/fetch_user_input', {'session_id': session_id})
         msg  = data.get('message')
         if msg:
@@ -123,7 +125,6 @@ def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
         time.sleep(interval)
 
 def write_log(content):
-    """寫入後端結構化 log（含時間戳記）"""
     if not log_path:
         return
     try:
@@ -134,8 +135,55 @@ def write_log(content):
         print(f"[log 寫入失敗] {e}")
 
 def is_exit(val):
-    """統一檢查是否為離開或中斷"""
     return val is None or val == '__INTERRUPTED__'
+
+
+# ──────────────────────────────────────────
+# que_set_log 專用函數
+# ──────────────────────────────────────────
+def init_que_log():
+    """建立 {session_id}_que_set_log.txt，寫入檔頭"""
+    global que_log_path
+    session_dir  = os.path.dirname(log_path) if log_path else LOG_DIR
+    que_log_path = os.path.join(session_dir, f"{session_id}_que_set_log.txt")
+    try:
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(que_log_path, 'w', encoding='utf-8') as f:
+            f.write(f"# que_set_log | session={session_id} | user={username} | 建立時間={ts}\n\n")
+        print(f"[que_log] 初始化完成：{que_log_path}")
+    except Exception as e:
+        print(f"[que_log 初始化失敗] {e}")
+
+def write_que_log(content):
+    """寫入 que_set_log（含時間戳記）"""
+    if not que_log_path:
+        return
+    try:
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(que_log_path, 'a', encoding='utf-8') as f:
+            f.write(f"[{ts}] {content}\n")
+    except Exception as e:
+        print(f"[que_log 寫入失敗] {e}")
+
+def record_question(n, concept, stem, clue, answer,
+                    wrong_options, first_label, second_label,
+                    guess_first, guess_second):
+    """將單題所有出題資訊以結構化格式寫入 que_set_log"""
+    write_que_log(f"[Q{n}_START]")
+    write_que_log(f"[Q{n}] 題號={n}")
+    write_que_log(f"[Q{n}] 概念標籤={concept}")
+    write_que_log(f"[Q{n}] 題幹={stem}")
+    write_que_log(f"[Q{n}] 關鍵線索={clue}")
+    write_que_log(f"[Q{n}] 正確答案A={answer}")
+    write_que_log(f"[Q{n}] 錯誤選項B={wrong_options[0]}")
+    write_que_log(f"[Q{n}] 錯誤選項C={wrong_options[1]}")
+    write_que_log(f"[Q{n}] 錯誤選項D={wrong_options[2]}")
+    write_que_log(f"[Q{n}] 易錯選項1={first_label}")
+    write_que_log(f"[Q{n}] 易錯選項2={second_label}")
+    write_que_log(f"[Q{n}] 易錯推測1={guess_first}")
+    write_que_log(f"[Q{n}] 易錯推測2={guess_second}")
+    write_que_log(f"[Q{n}_END]\n")
+    print(f"[que_log] 第 {n} 題已記錄")
 
 
 # ──────────────────────────────────────────
@@ -386,6 +434,13 @@ def make_question(n, total, used_concepts):
 
         write_log(f'[命題{n}] 易錯推測修改 | 1={guess_first} | 2={guess_second}')
 
+    # ── 所有資訊寫入 que_set_log ──
+    record_question(
+        n, concept, stem, clue, answer,
+        wrong_options, first_label, second_label,
+        guess_first, guess_second
+    )
+
     return True
 
 
@@ -393,6 +448,9 @@ def make_question(n, total, used_concepts):
 # 主要執行區塊
 # ──────────────────────────────────────────
 def main():
+    # 出題開始前先建立 que_set_log
+    init_que_log()
+
     send((
         f'嗨，{username}歡迎回來。我們進到下一步了。\n'
         '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
@@ -432,7 +490,12 @@ def main():
     )
 
     import subprocess
-    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
+    base_args = [
+        '--username',   username,
+        '--session_id', session_id,
+        '--log_path',   log_path,
+        '--que_log',    que_log_path,   # ← 傳遞 que_set_log 路徑
+    ]
     subprocess.Popen(
         ['python', 'va_que_ana.py'] + base_args,
         cwd=os.path.dirname(os.path.abspath(__file__))

@@ -19,13 +19,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--username',   default='未知')
 parser.add_argument('--session_id', default='')
 parser.add_argument('--log_path',   default='')
+parser.add_argument('--que_log',    default='')   # ← 新增：接收 que_set_log 路徑
 args = parser.parse_args()
 
 username   = args.username
 session_id = args.session_id
 log_path   = args.log_path
+que_log    = args.que_log    # {session_id}_que_set_log.txt 路徑
 
 print(f"[que_ana.py] 啟動  user={username}  session={session_id}")
+print(f"[que_ana.py] que_log={que_log}")
 
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
@@ -83,7 +86,6 @@ def send_buttons(labels, delay=0, colors=None, size='medium',
     print(f"[buttons] {labels}")
 
 def wait_for_user(interval=0.5, timeout=USER_TIMEOUT):
-    """等待用戶回應，離開回傳 None，被中斷回傳 '__INTERRUPTED__'"""
     while True:
         interrupted = _get('/check_interrupted', {'session_id': session_id})
         if interrupted.get('interrupted', False):
@@ -108,7 +110,6 @@ def is_exit(val):
     return val is None or val == '__INTERRUPTED__'
 
 def write_log(content):
-    """寫入後端結構化 log（含時間戳記）"""
     if not log_path:
         return
     try:
@@ -119,7 +120,6 @@ def write_log(content):
         print(f"[log 寫入失敗] {e}")
 
 def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
-    """呼叫 OpenAI，回傳回應文字"""
     try:
         response = openai.ChatCompletion.create(
             model=model,
@@ -154,13 +154,13 @@ V2b = V_TIME_BLIND（忽略時間線索，只要看到「相關」就固定選�
 X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不充分不懂/推反/否認關係）
 V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
+所有迷思值會在0~1之間波動，數字越高，迷思越強，學生就越有該迷思。
 
 只輸出答案，格式嚴格為「X,X,X,X,X,X,X,X」（8 個大寫字母，以逗號分隔），不要任何其他文字。\
 """
 
 
 def _acquire_lock(lock_path: str, timeout: float = 10.0) -> bool:
-    """等待 .lock 檔釋放後取得鎖"""
     import time as _time
     start = _time.time()
     while True:
@@ -198,7 +198,91 @@ def load_wide_table() -> list:
     return rows
 
 
-def row_to_prompt(row: dict, questions: list) -> str:
+# ──────────────────────────────────────────
+# que_set_log 讀取
+# ──────────────────────────────────────────
+def load_que_set_log() -> dict:
+    """
+    讀取 {session_id}_que_set_log.txt，
+    回傳 dict：{題號(int): {concept, stem, clue, A, B, C, D,
+                            易錯選項1, 易錯選項2, 易錯推測1, 易錯推測2}}
+    """
+    result = {}
+    path   = que_log
+
+    # 若 --que_log 未傳入，嘗試由 log_path 目錄推算
+    if not path:
+        session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
+        path = os.path.join(session_dir, f"{session_id}_que_set_log.txt")
+
+    if not os.path.exists(path):
+        print(f"[que_set_log] 檔案不存在：{path}")
+        return result
+
+    current_q = None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                # 去掉時間戳記 [YYYY-MM-DD HH:MM:SS]
+                if line.startswith('[') and '] ' in line:
+                    _, line = line.split('] ', 1)
+
+                # 偵測 [QN_START]
+                if line.startswith('[Q') and line.endswith('_START]'):
+                    try:
+                        n = int(line[2:-7])
+                        current_q = n
+                        result[n] = {}
+                    except ValueError:
+                        pass
+                    continue
+
+                # 偵測 [QN_END]
+                if line.startswith('[Q') and line.endswith('_END]'):
+                    current_q = None
+                    continue
+
+                # 解析 [QN] key=value
+                if current_q is not None and line.startswith(f'[Q{current_q}]'):
+                    body = line[len(f'[Q{current_q}]'):].strip()
+                    if '=' in body:
+                        key, val = body.split('=', 1)
+                        result[current_q][key.strip()] = val.strip()
+
+        print(f"[que_set_log] 讀取完成，共 {len(result)} 題")
+    except Exception as e:
+        print(f"[que_set_log 讀取失敗] {e}")
+
+    return result
+
+
+def que_info_summary(que_data: dict) -> str:
+    """
+    將 que_set_log 中所有題目的出題資訊整理為純文字，
+    供注入 OpenAI prompt 使用。
+    """
+    if not que_data:
+        return ''
+    lines = ['【出題者提供的額外資訊】']
+    for n in sorted(que_data.keys()):
+        q = que_data[n]
+        lines.append(
+            f"第{n}題｜概念：{q.get('概念標籤','')}｜"
+            f"關鍵線索：{q.get('關鍵線索','')}｜"
+            f"易錯選項：{q.get('易錯選項1','')} / {q.get('易錯選項2','')}｜"
+            f"易錯推測：{q.get('易錯推測1','')} / {q.get('易錯推測2','')}"
+        )
+    return '\n'.join(lines)
+
+
+# ──────────────────────────────────────────
+# prompt 組裝
+# ──────────────────────────────────────────
+def row_to_prompt(row: dict, questions: list, que_data: dict) -> str:
     stats = (
         f"accuracy={row.get('accuracy','')}  "
         f"avg_confidence={row.get('avg_confidence','')}  "
@@ -212,23 +296,30 @@ def row_to_prompt(row: dict, questions: list) -> str:
         f"題{i+1}：{q['stem']}\n選項：{', '.join(f'{k}. {v}' for k, v in q['options'].items())}"
         for i, q in enumerate(questions)
     )
-    return f"學生數值：\n{stats}\n\n題目：\n{ques}"
+
+    # 從 que_set_log 補充出題者設計意圖
+    extra = que_info_summary(que_data)
+
+    prompt = f"學生數值：\n{stats}\n\n題目：\n{ques}"
+    if extra:
+        prompt += f"\n\n{extra}"
+    return prompt
 
 
+# ──────────────────────────────────────────
+# 答案矩陣存檔
+# ──────────────────────────────────────────
 def save_answer_matrix(answers: list, questions: list):
     import csv
     session_dir = os.path.dirname(log_path) if log_path else LOG_DIR
     out_path    = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
 
     correct_answers = ['A'] * 8
-
     header = [f'Q{i+1}' for i in range(8)] + ['Total']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            # 第一列：欄位標題
             writer.writerow(header)
-            # 每個學生的作答（A=1, BCD=0）與總分
             for row in answers:
                 binary = [1 if ans == 'A' else 0 for ans in row[:8]]
                 score  = sum(binary)
@@ -240,7 +331,29 @@ def save_answer_matrix(answers: list, questions: list):
     return out_path
 
 
+# ──────────────────────────────────────────
+# 題目解析：優先 que_set_log，fallback 原 log
+# ──────────────────────────────────────────
+def parse_questions_from_que_log(que_data: dict) -> list:
+    """從 que_set_log dict 組裝 questions list"""
+    questions = []
+    for n in sorted(que_data.keys()):
+        q = que_data[n]
+        if all(k in q for k in ('題幹', '正確答案A', '錯誤選項B', '錯誤選項C', '錯誤選項D')):
+            questions.append({
+                'stem':    q['題幹'],
+                'options': {
+                    'A': q['正確答案A'],
+                    'B': q['錯誤選項B'],
+                    'C': q['錯誤選項C'],
+                    'D': q['錯誤選項D'],
+                }
+            })
+    print(f"[parse_que_log] 解析到 {len(questions)} 題")
+    return questions
+
 def parse_questions_from_log() -> list:
+    """Fallback：從原始 log_path 解析題目（與舊版相同）"""
     questions = []
     if not log_path or not os.path.exists(log_path):
         print(f"[parse] log 不存在：{log_path}")
@@ -268,31 +381,44 @@ def parse_questions_from_log() -> list:
                     })
     except Exception as e:
         print(f"[parse log 失敗] {e}")
-    print(f"[parse] 解析到 {len(questions)} 題")
+    print(f"[parse fallback] 解析到 {len(questions)} 題")
     return questions
 
 
+# ──────────────────────────────────────────
+# 主流程
+# ──────────────────────────────────────────
 def main():
     rows = load_wide_table()
     if not rows:
         send('（孿生學生資料讀取失敗，請聯絡助教。）')
         return
 
-    target_rows = rows[:MAX_STUDENTS]
-    total       = len(target_rows)
-    print(f"[que_ana] 將生成 {total} 筆孿生答案")
+    # 讀取 que_set_log（含出題者的設計資訊）
+    que_data = load_que_set_log()
 
-    questions = parse_questions_from_log()
+    # 優先從 que_set_log 解析題目，不足再 fallback
+    if len(que_data) >= 8:
+        questions = parse_questions_from_que_log(que_data)
+    else:
+        print("[que_ana] que_set_log 題數不足，改用原始 log fallback")
+        questions = parse_questions_from_log()
+
     if len(questions) < 8:
         send(f'（題目解析失敗，僅讀到 {len(questions)} 題，請聯絡助教。）')
         return
+
+    target_rows = rows[:MAX_STUDENTS]
+    total       = len(target_rows)
+    print(f"[que_ana] 將生成 {total} 筆孿生答案")
 
     send('孿生 AI 學生正在作答中，請稍候…', delay=1)
     _thinking(True)
 
     all_answers = []
     for idx, row in enumerate(target_rows):
-        user_prompt = row_to_prompt(row, questions)
+        # 傳入 que_data，讓 prompt 包含出題者設計意圖
+        user_prompt = row_to_prompt(row, questions, que_data)
         reply       = ask_openai(SYSTEM_PROMPT, user_prompt, temperature=0.3)
 
         if not reply:
@@ -326,7 +452,6 @@ def main():
                 counts[ans] += 1
         stats[key] = counts
 
-    # 計算每個學生的成績
     students = []
     for i, row in enumerate(all_answers):
         score = sum(1 for q_idx, ans in enumerate(row)
@@ -361,7 +486,12 @@ def main():
 
     import sys
     import subprocess
-    base_args = ['--username', username, '--session_id', session_id, '--log_path', log_path]
+    base_args = [
+        '--username',   username,
+        '--session_id', session_id,
+        '--log_path',   log_path,
+        '--que_log',    que_log,    # ← 繼續往下傳
+    ]
     subprocess.Popen(
         [sys.executable, 'va_pd.py'] + base_args,
         cwd=os.path.dirname(os.path.abspath(__file__))
