@@ -491,7 +491,6 @@ def main():
         '--username',   username,
         '--session_id', session_id,
         '--log_path',   log_path,
-        '--que_log',    que_log,    # ← 繼續往下傳
     ]
     subprocess.Popen(
         [sys.executable, 'va_pd.py'] + base_args,
