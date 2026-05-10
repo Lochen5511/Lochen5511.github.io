@@ -145,6 +145,13 @@ def lookup_session(session_id: str) -> dict | None:
     db = load_db()
     return db.get(session_id)
 
+def lookup_session_by_return_id(return_id: str) -> dict | None:
+    db = load_db()
+    for record in db.values():
+        if record.get('return_id') == return_id:
+            return record
+    return None
+
 
 # ──────────────────────────────────────────
 # 工具
@@ -274,19 +281,34 @@ def greeting_true_ending():
     username   = data.get('username', '未知').strip()
     session_id = data.get('session_id', '')
 
+    # ── 新 session 的記錄（用於推送訊息）──
     record = lookup_session(session_id)
+
+    # ── 從新 session 記錄中取得 return_id，再找舊 session 的 log_path ──
+    old_log_path = ''
     if record:
-        log_path = record.get('log_path', '')
-    else:
-        session_dir = os.path.join(LOG_DIR, f"{username}_{session_id}")
-        os.makedirs(session_dir, exist_ok=True)
-        log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+        return_id = record.get('return_id', '')
+        if return_id:
+            old_record = lookup_session_by_return_id(return_id)
+            if old_record:
+                old_log_path = old_record.get('log_path', '')
+                print(f"[greeting_true_ending] 找到舊 log_path：{old_log_path}")
+
+    # ── fallback：找不到舊路徑時用新 session 路徑 ──
+    if not old_log_path:
+        if record:
+            old_log_path = record.get('log_path', '')
+        else:
+            session_dir  = os.path.join(LOG_DIR, f"{username}_{session_id}")
+            os.makedirs(session_dir, exist_ok=True)
+            old_log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")
+        print(f"[greeting_true_ending] 警告：使用 fallback log_path：{old_log_path}")
 
     if session_id and session_id not in launched_sessions:
         launched_sessions.add(session_id)
         threading.Thread(
             target=launch_script,
-            args=('true_ending.py', username, session_id, log_path),
+            args=('true_ending.py', username, session_id, old_log_path),
             daemon=True
         ).start()
         print(f"[greeting_true_ending] 啟動 true_ending.py  session={session_id}")
