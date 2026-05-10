@@ -145,13 +145,6 @@ def lookup_session(session_id: str) -> dict | None:
     db = load_db()
     return db.get(session_id)
 
-def lookup_session_by_return_id(return_id: str) -> dict | None:
-    db = load_db()
-    for record in db.values():
-        if record.get('return_id') == return_id:
-            return record
-    return None
-
 
 # ──────────────────────────────────────────
 # 工具
@@ -237,6 +230,7 @@ def enter_id():
         'username':   username,
         'session_id': session_id,
         'unit':       record.get('unit', ''),
+        'old_log_path': log_path,
     })
 
 
@@ -277,28 +271,17 @@ def greeting_true_ending():
     if request.method == 'OPTIONS':
         return Response(status=200)
 
-    data       = request.get_json() or {}
-    username   = data.get('username', '未知').strip()
-    session_id = data.get('session_id', '')
+    data         = request.get_json() or {}
+    username     = data.get('username', '未知').strip()
+    session_id   = data.get('session_id', '')
+    old_log_path = data.get('old_log_path', '')   # ← 新增
 
-    # ── 新 session 的記錄（用於推送訊息）──
-    record = lookup_session(session_id)
-
-    # ── 從新 session 記錄中取得 return_id，再找舊 session 的 log_path ──
-    old_log_path = ''
-    if record:
-        return_id = record.get('return_id', '')
-        if return_id:
-            old_record = lookup_session_by_return_id(return_id)
-            if old_record:
-                old_log_path = old_record.get('log_path', '')
-                print(f"[greeting_true_ending] 找到舊 log_path：{old_log_path}")
-
-    # ── fallback：找不到舊路徑時用新 session 路徑 ──
+    # fallback：萬一沒帶到，用新 session 路徑
     if not old_log_path:
+        record = lookup_session(session_id)
         if record:
             old_log_path = record.get('log_path', '')
-        else:
+        if not old_log_path:
             session_dir  = os.path.join(LOG_DIR, f"{username}_{session_id}")
             os.makedirs(session_dir, exist_ok=True)
             old_log_path = os.path.join(session_dir, f"{username}_{session_id}.txt")

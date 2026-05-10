@@ -20,13 +20,13 @@ print(f"[true_ending.py] 啟動  user={username}  session={session_id}")
 # ──────────────────────────────────────────
 # 路徑設定
 # ──────────────────────────────────────────
-session_dir  = os.path.dirname(log_path) if log_path else '.'
-folder_name  = f"{username}_{session_id}"
-folder_path  = os.path.join(session_dir, folder_name)
+# 從 log_path 反推舊 session_id 與題庫路徑
+session_dir     = os.path.dirname(log_path)
+old_folder_name = os.path.basename(session_dir)
+old_session_id  = old_folder_name.replace(f"{username}_", "", 1)
 
-pd_txt_path  = os.path.join(folder_path, f"{folder_name}.txt")
-que_log_name = f"{session_id}_que_set_log.txt"
-que_log_path = os.path.join(folder_path, que_log_name)
+pd_txt_path  = log_path
+que_log_path = os.path.join(session_dir, f"{old_session_id}_que_set_log.txt")
 
 print(f"[true_ending] PD 報告路徑：{pd_txt_path}")
 print(f"[true_ending] 題庫路徑：  {que_log_path}")

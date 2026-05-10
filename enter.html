@@ -375,7 +375,7 @@
         if (unit === '出題') mode = 'true_ending';
 
         window.location.href =
-          `main.html?username=${encodeURIComponent(data.username)}&session_id=${encodeURIComponent(data.session_id)}&mode=${mode}`;
+        `main.html?username=${encodeURIComponent(data.username)}&session_id=${encodeURIComponent(data.session_id)}&mode=${mode}&old_log_path=${encodeURIComponent(data.old_log_path || '')}`;
       } else {
         showStatus(data.error || '未找到記錄，請聯絡助教。');
         document.getElementById('idBtn').disabled = false;
