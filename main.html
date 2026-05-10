@@ -1132,7 +1132,8 @@
                 : mode === 'true_ending' ? '/greeting_true_ending'
                 : '/greeting';
     try {
-      const res  = await post_r(route, { username: userName, session_id: sessionId });
+      const oldLogPath = params.get('old_log_path') || '';
+      const res = await post_r(route, { username: userName, session_id: sessionId, old_log_path: oldLogPath });
       const data = await res.json();
       removeTyping();
       const reply = data.reply || '> 系統初始化失敗，請聯絡助教（u11301126@go.utaipei.edu.tw）。)';
