@@ -206,7 +206,7 @@ def make_question(n, total, used_concepts):
     remaining_concepts = [c for c in ALL_CONCEPTS if c not in used_concepts]
 
     if remaining_concepts:
-        send('請先選1個想命題的概念，當做這題的標籤。', delay=1)
+        send('請選1個想命題的概念，當做這題的標籤。', delay=1)
         send_dropdown(
             options     = remaining_concepts,
             placeholder = '請選擇概念標籤…',
@@ -223,17 +223,16 @@ def make_question(n, total, used_concepts):
     print(f"[set_que] 題{n} 概念={concept}")
 
     send((
-        '再來，請你寫出一個「看得懂、問得清楚」的題幹。'
-        '你可以先不用想選項，先把題幹寫出來就好。\n\n'
-        '如果你卡住，我給你三個很容易開始的題幹套路，選一個套進去就行：\n'
+        '再來，請寫出一個清楚易讀的題幹。'
+        '現在只想問題就好，還不需要思考選項。\n\n'
+        '以下是三種範例：\n'
         '・套路 A：證據判讀型\n'
         '「老師用了___來檢核題目品質，這主要支持哪種效度證據？」\n\n'
         '・套路 B：時間線索型（同時 vs 預測）\n'
         '「測驗分數與___（當下／一年後）表現相關，這是哪種效度？」\n\n'
         '・套路 C：推論型（信度≠效度）\n'
         '「α很高／分數很穩定，能不能推論效度一定高？」\n\n'
-        '你想用哪一種？或你直接開始寫也可以。'
-        '一個完整的題幹，字數 ≥ 40 字，「2–4 句情境 + 1 句問句」'
+        '請寫出完整的題幹，字數 ≥ 40 字，「2–4 句情境 + 1 句問句」'
         '（請直接於聊天框輸入完整的題目。）'
     ), delay=1)
 
@@ -242,7 +241,7 @@ def make_question(n, total, used_concepts):
     print(f"[set_que] 題{n} 題幹={stem[:60]}")
 
     send((
-        '對了，你希望作答的人從題幹中核心判斷的線索（題幹關鍵字）是什麼？\n'
+        '在你的題幹中，學生判讀答案的關鍵字是什麼？\n'
         '例如：「同一時間點」「一年後」「雙向細目表」「因素分析」「α很高」'
     ), delay=1)
 
@@ -254,10 +253,6 @@ def make_question(n, total, used_concepts):
 
     while True:
         send((
-            '接下來，把你的四個選項寫出來，並且讓至少兩個錯選項「有意義」，'
-            '也就是能代表常見的錯誤想法。\n\n'
-            '小提示：如果你不知道錯選項怎麼寫，你可以考慮把正確概念改一個關鍵詞，'
-            '就會變成典型迷思。例如：把「當下」換成「一年後」。\n\n'
             f'再看一次你的題幹：\n{stem}'
         ), delay=1)
         send_buttons(
@@ -275,8 +270,12 @@ def make_question(n, total, used_concepts):
         if is_exit(new_stem): return False
         stem = new_stem
         write_log(f'[命題{n}] 題幹修改={stem}')
-
-    send('請告訴我，你心中的正確答案：', delay=1)
+    send("接著我們來寫選項。\n"
+         "在四個選項中，排除正確的選項，至少要有兩個錯誤選項有「誘答力」，也就是能代表常見迷思。"
+         "如果你不知道怎麼寫，可以把正確觀念改掉一個關鍵字，就會變成迷思。"
+            , delay=0.5
+         )
+    send('首先，請告訴我，你心中的正確答案：', delay=1)
     answer = wait_for_user()
     if is_exit(answer): return False
     print(f"[set_que] 題{n} 正確答案={answer[:60]}")
@@ -355,8 +354,7 @@ def make_question(n, total, used_concepts):
         wrong_options[2] = v
 
     send((
-        '接下來我想請你挑出兩個「最容易讓人選錯」的選項。\n'
-        '你不用挑全部，只要挑兩個就好。'
+        '接下來，請你挑出兩個「最容易讓人選錯」的選項。'
     ), delay=1)
 
     send_checkbox(
@@ -452,10 +450,10 @@ def main():
     init_que_log()
 
     send((
-        f'嗨，{username}歡迎回來。我們進到下一步了。\n'
+        f'嗨，{username}，歡迎回來！\n'
         '現在要請你扮演「命題者」，練習把所學的概念變成題目。'
-        '我會用三個小關卡帶你走。\n'
-        '你不用一次就寫得很完美，只要一關一關完成就好。'
+        '我會用三個小關卡指引你。\n'
+        '你不用一次就寫得很完美，只要逐題完成就好。'
     ), delay=1)
 
     send_buttons(
@@ -472,11 +470,8 @@ def main():
     used_concepts = set()
     for n in range(1, TOTAL_QUE + 1):
         if n > 1:
-            remaining = TOTAL_QUE - (n - 1)
             send((
-                f'接著，請再出 {remaining} 題'
-                f'（我們總共要出 {TOTAL_QUE} 題），'
-                f'讓我們繼續出第 {n} 題。'
+                f'完成進度：{n-1}/{TOTAL_QUE} 題\n'
             ), delay=1)
 
         ok = make_question(n, TOTAL_QUE, used_concepts)

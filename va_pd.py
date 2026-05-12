@@ -287,7 +287,7 @@ def main():
 
     send(
         '你已完成 8 題命題，接下來你可以下載上面的作答分數記錄，或是點擊右邊的頁籤檢視詳細資料。\n'
-        '接下來我們要做「審題」的事情，也就是用數據回頭檢討你每一題的品質。',
+        '接下來我們要來「審題」，也就是用數據確認你每一題的品質。',
         delay=0.5
     )
 
@@ -442,6 +442,16 @@ def main():
         write_log(f'[va_pd] Return ID 已產生：{rid}')
     else:
         send('（Return ID 產生失敗，請聯絡助教。）', delay=0.5)
+        
+    
+    # ── 更新 unit 為「出題」────────────────────
+    try:
+        requests.post(f'{BACKEND}/update_unit',
+                      json={'session_id': session_id, 'unit': '出題'}, timeout=5)
+        write_log('[va_pd] unit 已更新為「出題」')
+        print(f"[va_pd] unit 已更新為「出題」session={session_id}")
+    except Exception as e:
+        print(f"[va_pd] 更新 unit 失敗：{e}")
 
     # ── 收集 email 並寄送結果 ──────────────────
     while True:
@@ -493,15 +503,6 @@ def main():
         size       = 'medium',
         button_ids = ['btn_goto_enter']
     )
-
-    # ── 更新 unit 為「出題」────────────────────
-    try:
-        requests.post(f'{BACKEND}/update_unit',
-                      json={'session_id': session_id, 'unit': '出題'}, timeout=5)
-        write_log('[va_pd] unit 已更新為「出題」')
-        print(f"[va_pd] unit 已更新為「出題」session={session_id}")
-    except Exception as e:
-        print(f"[va_pd] 更新 unit 失敗：{e}")
 
     print("[va_pd.py] 執行完畢")
 
