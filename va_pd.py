@@ -417,11 +417,15 @@ def main():
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
+    # 深色介面配色
     LABEL_COLOR = {
-        '優異':   ('#d4edda', '#155724'),
-        '正常':   ('#cce5ff', '#004085'),
-        '待加強': ('#fff3cd', '#856404'),
+        '優異':   ('rgba(106,191,105,0.18)', '#6abf69'),
+        '正常':   ('rgba(106,170,191,0.18)', '#6aaabf'),
+        '待加強': ('rgba(201,168,76,0.18)',  '#c9a84c'),
     }
+
+    TD  = 'padding:7px 12px;border:1px solid rgba(201,168,76,0.25);color:#f8f4ec;'
+    TDC = TD + 'text-align:center;'
 
     rows_html = []
     for q_key, val in pd_result.items():
@@ -430,36 +434,36 @@ def main():
         user_d     = ur.get('user_d', '—')
         is_correct = ur.get('correct', False)
         label      = d_label(val['d'])
-        bg, fg     = LABEL_COLOR.get(label, ('#eee', '#333'))
+        bg, fg     = LABEL_COLOR.get(label, ('rgba(255,255,255,0.08)', '#f8f4ec'))
         ok_symbol  = '✓' if is_correct else '✗'
-        ok_color   = '#155724' if is_correct else '#721c24'
-        ok_bg      = '#d4edda' if is_correct else '#f8d7da'
+        ok_color   = '#6abf69' if is_correct else '#bf6a6a'
+        ok_bg      = 'rgba(106,191,105,0.18)' if is_correct else 'rgba(191,106,106,0.18)'
         rows_html.append(
             f'<tr>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;">{q_key}</td>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;">{val["p"]}</td>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;">{val["d"]}</td>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;">'
+            f'<td style="{TD}">{q_key}</td>'
+            f'<td style="{TD}">{val["p"]}</td>'
+            f'<td style="{TD}">{val["d"]}</td>'
+            f'<td style="{TD}">'
             f'<span style="background:{bg};color:{fg};padding:2px 8px;border-radius:4px;font-size:13px;">{label}</span>'
             f'</td>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;">({user_p},{user_d})</td>'
-            f'<td style="padding:7px 12px;border:1px solid #ccc;text-align:center;'
-            f'background:{ok_bg};color:{ok_color};font-weight:bold;">{ok_symbol}</td>'
+            f'<td style="{TD}">({user_p},{user_d})</td>'
+            f'<td style="{TDC}background:{ok_bg};color:{ok_color};font-weight:bold;">{ok_symbol}</td>'
             f'</tr>'
         )
 
-    th = 'style="padding:8px 12px;border:1px solid #ccc;background:#f0f0f0;text-align:left;"'
+    TH  = 'padding:8px 12px;border:1px solid rgba(201,168,76,0.35);background:rgba(201,168,76,0.1);color:#c9a84c;text-align:left;font-weight:400;letter-spacing:0.05em;'
+    THC = TH + 'text-align:center;'
     html = (
         '__HTML__'
-        '<p style="margin:0 0 8px;font-weight:bold;">各題難度與鑑別度總覽：</p>'
-        '<table style="border-collapse:collapse;width:100%;font-size:14px;font-family:sans-serif;">'
+        '<p style="margin:0 0 10px;color:#c9a84c;letter-spacing:0.1em;font-size:14px;">各題難度與鑑別度總覽：</p>'
+        '<table style="border-collapse:collapse;width:100%;font-size:14px;font-family:Noto Serif TC,serif;">'
         '<thead><tr>'
-        f'<th {th}>題目</th>'
-        f'<th {th}>難度P</th>'
-        f'<th {th}>鑑別度D</th>'
-        f'<th {th}>評價</th>'
-        f'<th {th}>你計算的p,D值</th>'
-        f'<th {th} style="padding:8px 12px;border:1px solid #ccc;background:#f0f0f0;text-align:center;">p,D計算是否正確</th>'
+        f'<th style="{TH}">題目</th>'
+        f'<th style="{TH}">難度P</th>'
+        f'<th style="{TH}">鑑別度D</th>'
+        f'<th style="{TH}">評價</th>'
+        f'<th style="{TH}">你計算的p,D值</th>'
+        f'<th style="{THC}">p,D計算是否正確</th>'
         '</tr></thead>'
         '<tbody>' + ''.join(rows_html) + '</tbody>'
         '</table>'
