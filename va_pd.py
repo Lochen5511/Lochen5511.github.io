@@ -219,9 +219,8 @@ def _send_result_email(to_addr, username, return_id, pd_result, user_pd_results)
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
-    # 表格：正確答案 + 學生作答 + 是否答對
-    table_lines = ['題目 | 難度 P | 鑑別度 D | 評價 | 你的作答 | 是否答對']
-    table_lines.append('-' * 52)
+    table_lines = ['題目 | 難度 P | 鑑別度 D | 評價 | 你計算的p,D值 | p,D計算是否正確']
+    table_lines.append('-' * 60)
     for q_key, val in pd_result.items():
         ur      = user_pd_results.get(q_key, {})
         user_p  = ur.get('user_p', '—')
@@ -276,6 +275,30 @@ def parse_pd_input(text: str):
     if len(parts) != 2:
         return None
     return (parts[0], parts[1])
+
+
+# ──────────────────────────────────────────
+# 表格對齊工具
+# ──────────────────────────────────────────
+def _col(text, width):
+    """填滿至指定半形寬度（中文字算2個半形）"""
+    s = str(text)
+    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
+    display_w = len(s) + cjk
+    return s + ' ' * max(0, width - display_w)
+
+def pad_to(val_str: str, max_len: int) -> str:
+    """在字串右側補空格至 max_len 個半形字元寬（中文字算2個半形）"""
+    s = str(val_str)
+    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
+    display_w = len(s) + cjk
+    return s + ' ' * max(0, max_len - display_w)
+
+def display_width(s: str) -> int:
+    """計算字串的顯示寬度（中文字算2個半形）"""
+    s = str(s)
+    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
+    return len(s) + cjk
 
 
 # ──────────────────────────────────────────
@@ -356,7 +379,6 @@ def main():
             except ValueError:
                 pass
 
-        # 記錄該題作答結果
         user_pd_results[q_key] = {
             'user_p':  user_p_val,
             'user_d':  user_d_val,
@@ -374,50 +396,63 @@ def main():
             )
             write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解=({correct_p},{correct_d})')
 
-    # ── 發送難度鑑別度總表（含學生作答與是否正確）──
+    # ── 發送難度鑑別度總表 ──────────────────────
     def d_label(d):
         if d >= 0.4:    return '優異'
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
-    def _col(text, width):
-        """填滿至指定半形寬度（中文字算2個半形）"""
-        s = str(text)
-        cjk = sum(1 for c in s if ord(c) > 0x2E7F)
-        display_w = len(s) + cjk
-        return s + ' ' * max(0, width - display_w)
+    # 先把所有要顯示的字串準備好
+    p_strs      = {q: str(val['p'])                                         for q, val in pd_result.items()}
+    d_strs      = {q: str(val['d'])                                         for q, val in pd_result.items()}
+    user_p_strs = {q: str(user_pd_results.get(q, {}).get('user_p', '—'))   for q in pd_result}
+    user_d_strs = {q: str(user_pd_results.get(q, {}).get('user_d', '—'))   for q in pd_result}
+    ans_strs    = {q: f'({user_p_strs[q]},{user_d_strs[q]})'               for q in pd_result}
+    label_strs  = {q: d_label(val['d'])                                     for q, val in pd_result.items()}
 
-    W = {'q': 4, 'p': 7, 'd': 7, 'label': 8, 'ans': 12, 'ok': 5}
+    # 各欄動態最大寬度（與標題取較大值）
+    HDR_P     = '難度P'
+    HDR_D     = '鑑別度D'
+    HDR_ANS   = '你計算的p,D值'
+    HDR_OK    = 'p,D計算是否正確'
+    HDR_Q     = '題目'
+    HDR_LABEL = '評價'
+
+    max_q     = max(display_width(HDR_Q),     max(display_width(q) for q in pd_result))
+    max_p     = max(display_width(HDR_P),     max(display_width(s) for s in p_strs.values()))
+    max_d     = max(display_width(HDR_D),     max(display_width(s) for s in d_strs.values()))
+    max_label = max(display_width(HDR_LABEL), max(display_width(s) for s in label_strs.values()))
+    max_ans   = max(display_width(HDR_ANS),   max(display_width(s) for s in ans_strs.values()))
+
+    SEP = '  '
 
     table_lines = ['各題難度與鑑別度總覽：\n']
     table_lines.append(
-        _col('題目',   W['q'])     + '  ' +
-        _col('難度P',  W['p'])     + '  ' +
-        _col('鑑別度D',W['d'])     + '  ' +
-        _col('評價',   W['label']) + '  ' +
-        _col('你的作答',W['ans'])  + '  ' +
-        '是否答對'
+        pad_to(HDR_Q,     max_q)     + SEP +
+        pad_to(HDR_P,     max_p)     + SEP +
+        pad_to(HDR_D,     max_d)     + SEP +
+        pad_to(HDR_LABEL, max_label) + SEP +
+        pad_to(HDR_ANS,   max_ans)   + SEP +
+        HDR_OK
     )
-    table_lines.append('─' * 52)
+    total_w = max_q + max_p + max_d + max_label + max_ans + display_width(HDR_OK) + len(SEP) * 5
+    table_lines.append('─' * total_w)
+
     for q_key, val in pd_result.items():
         ur      = user_pd_results.get(q_key, {})
-        user_p  = ur.get('user_p', '—')
-        user_d  = ur.get('user_d', '—')
         correct = '✓' if ur.get('correct', False) else '✗'
-        label   = d_label(val['d'])
-        ans_str = f'({user_p},{user_d})'
         table_lines.append(
-            _col(q_key,    W['q'])     + '  ' +
-            _col(val['p'], W['p'])     + '  ' +
-            _col(val['d'], W['d'])     + '  ' +
-            _col(label,    W['label']) + '  ' +
-            _col(ans_str,  W['ans'])   + '  ' +
+            pad_to(q_key,              max_q)     + SEP +
+            pad_to(p_strs[q_key],     max_p)     + SEP +
+            pad_to(d_strs[q_key],     max_d)     + SEP +
+            pad_to(label_strs[q_key], max_label) + SEP +
+            pad_to(ans_strs[q_key],   max_ans)   + SEP +
             correct
         )
+
     send('\n'.join(table_lines), delay=0.5)
     write_log('[va_pd] 發送難度鑑別度總表（含學生作答）')
 
-    # 將每題作答結果寫入 log
     for q_key, ur in user_pd_results.items():
         write_log(
             f'[va_pd] {q_key} 作答=({ur["user_p"]},{ur["user_d"]}) '
@@ -442,8 +477,7 @@ def main():
         write_log(f'[va_pd] Return ID 已產生：{rid}')
     else:
         send('（Return ID 產生失敗，請聯絡助教。）', delay=0.5)
-        
-    
+
     # ── 更新 unit 為「出題」────────────────────
     try:
         requests.post(f'{BACKEND}/update_unit',
@@ -489,7 +523,7 @@ def main():
         username        = username,
         return_id       = rid or '',
         pd_result       = pd_result,
-        user_pd_results = user_pd_results,   # ← 新增
+        user_pd_results = user_pd_results,
     )
 
     if success:
