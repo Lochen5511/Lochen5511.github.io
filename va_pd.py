@@ -280,25 +280,40 @@ def parse_pd_input(text: str):
 # ──────────────────────────────────────────
 # 表格對齊工具
 # ──────────────────────────────────────────
-def _col(text, width):
-    """填滿至指定半形寬度（中文字算2個半形）"""
-    s = str(text)
-    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
-    display_w = len(s) + cjk
-    return s + ' ' * max(0, width - display_w)
-
-def pad_to(val_str: str, max_len: int) -> str:
-    """在字串右側補空格至 max_len 個半形字元寬（中文字算2個半形）"""
-    s = str(val_str)
-    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
-    display_w = len(s) + cjk
-    return s + ' ' * max(0, max_len - display_w)
+def _is_wide(c: str) -> bool:
+    """判斷字元是否為全形（佔兩個半形寬度）"""
+    cp = ord(c)
+    return (
+        0x1100 <= cp <= 0x115F or   # Hangul Jamo
+        0x2E80 <= cp <= 0x303E or   # CJK Radicals / Kangxi
+        0x3041 <= cp <= 0x33BF or   # Hiragana, Katakana, Bopomofo, CJK Compat
+        0x33FF <= cp <= 0xA4CF or   # CJK Unified Ideographs Extension
+        0xA960 <= cp <= 0xA97F or   # Hangul Jamo Extended-A
+        0xAC00 <= cp <= 0xD7FF or   # Hangul Syllables + Jamo Extended-B
+        0xF900 <= cp <= 0xFAFF or   # CJK Compatibility Ideographs
+        0xFE10 <= cp <= 0xFE1F or   # Vertical Forms
+        0xFE30 <= cp <= 0xFE6F or   # CJK Compatibility Forms / Small Forms
+        0xFF01 <= cp <= 0xFF60 or   # Fullwidth Latin / Halfwidth Katakana
+        0xFFE0 <= cp <= 0xFFE6 or   # Fullwidth Signs
+        0x1B000 <= cp <= 0x1B0FF or # Kana Supplement
+        0x1F004 <= cp <= 0x1F0CF or # Mahjong / Playing Cards
+        0x1F200 <= cp <= 0x1F2FF or # Enclosed CJK Letters Supplement
+        0x20000 <= cp <= 0x2FFFD or # CJK Unified Ideographs Extension B-F
+        0x30000 <= cp <= 0x3FFFD    # CJK Unified Ideographs Extension G+
+    )
 
 def display_width(s: str) -> int:
-    """計算字串的顯示寬度（中文字算2個半形）"""
-    s = str(s)
-    cjk = sum(1 for c in s if ord(c) > 0x2E7F)
-    return len(s) + cjk
+    """計算字串的顯示寬度（全形字算2個半形）"""
+    return sum(2 if _is_wide(c) else 1 for c in str(s))
+
+def pad_to(val_str: str, max_len: int) -> str:
+    """在字串右側補空格至 max_len 個半形字元寬"""
+    s = str(val_str)
+    return s + ' ' * max(0, max_len - display_width(s))
+
+def _col(text, width):
+    """填滿至指定半形寬度（相容舊介面）"""
+    return pad_to(str(text), width)
 
 
 # ──────────────────────────────────────────
@@ -396,62 +411,62 @@ def main():
             )
             write_log(f'[va_pd] 第{q_num}題 用戶答錯，輸入={user_input}，正解=({correct_p},{correct_d})')
 
-    # ── 發送難度鑑別度總表 ──────────────────────
+    # ── 發送難度鑑別度總表（HTML 版）──────────────
     def d_label(d):
         if d >= 0.4:    return '優異'
         elif d >= 0.25: return '正常'
         else:           return '待加強'
 
-    # 先把所有要顯示的字串準備好
-    p_strs      = {q: str(val['p'])                                         for q, val in pd_result.items()}
-    d_strs      = {q: str(val['d'])                                         for q, val in pd_result.items()}
-    user_p_strs = {q: str(user_pd_results.get(q, {}).get('user_p', '—'))   for q in pd_result}
-    user_d_strs = {q: str(user_pd_results.get(q, {}).get('user_d', '—'))   for q in pd_result}
-    ans_strs    = {q: f'({user_p_strs[q]},{user_d_strs[q]})'               for q in pd_result}
-    label_strs  = {q: d_label(val['d'])                                     for q, val in pd_result.items()}
+    LABEL_COLOR = {
+        '優異':   ('#d4edda', '#155724'),
+        '正常':   ('#cce5ff', '#004085'),
+        '待加強': ('#fff3cd', '#856404'),
+    }
 
-    # 各欄動態最大寬度（與標題取較大值）
-    HDR_P     = '難度P'
-    HDR_D     = '鑑別度D'
-    HDR_ANS   = '你計算的p,D值'
-    HDR_OK    = 'p,D計算是否正確'
-    HDR_Q     = '題目'
-    HDR_LABEL = '評價'
-
-    max_q     = max(display_width(HDR_Q),     max(display_width(q) for q in pd_result))
-    max_p     = max(display_width(HDR_P),     max(display_width(s) for s in p_strs.values()))
-    max_d     = max(display_width(HDR_D),     max(display_width(s) for s in d_strs.values()))
-    max_label = max(display_width(HDR_LABEL), max(display_width(s) for s in label_strs.values()))
-    max_ans   = max(display_width(HDR_ANS),   max(display_width(s) for s in ans_strs.values()))
-
-    SEP = '  '
-
-    table_lines = ['各題難度與鑑別度總覽：\n']
-    table_lines.append(
-        pad_to(HDR_Q,     max_q)     + SEP +
-        pad_to(HDR_P,     max_p)     + SEP +
-        pad_to(HDR_D,     max_d)     + SEP +
-        pad_to(HDR_LABEL, max_label) + SEP +
-        pad_to(HDR_ANS,   max_ans)   + SEP +
-        HDR_OK
-    )
-    total_w = max_q + max_p + max_d + max_label + max_ans + display_width(HDR_OK) + len(SEP) * 5
-    table_lines.append('─' * total_w)
-
+    rows_html = []
     for q_key, val in pd_result.items():
-        ur      = user_pd_results.get(q_key, {})
-        correct = '✓' if ur.get('correct', False) else '✗'
-        table_lines.append(
-            pad_to(q_key,              max_q)     + SEP +
-            pad_to(p_strs[q_key],     max_p)     + SEP +
-            pad_to(d_strs[q_key],     max_d)     + SEP +
-            pad_to(label_strs[q_key], max_label) + SEP +
-            pad_to(ans_strs[q_key],   max_ans)   + SEP +
-            correct
+        ur         = user_pd_results.get(q_key, {})
+        user_p     = ur.get('user_p', '—')
+        user_d     = ur.get('user_d', '—')
+        is_correct = ur.get('correct', False)
+        label      = d_label(val['d'])
+        bg, fg     = LABEL_COLOR.get(label, ('#eee', '#333'))
+        ok_symbol  = '✓' if is_correct else '✗'
+        ok_color   = '#155724' if is_correct else '#721c24'
+        ok_bg      = '#d4edda' if is_correct else '#f8d7da'
+        rows_html.append(
+            f'<tr>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;">{q_key}</td>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;">{val["p"]}</td>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;">{val["d"]}</td>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;">'
+            f'<span style="background:{bg};color:{fg};padding:2px 8px;border-radius:4px;font-size:13px;">{label}</span>'
+            f'</td>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;">({user_p},{user_d})</td>'
+            f'<td style="padding:7px 12px;border:1px solid #ccc;text-align:center;'
+            f'background:{ok_bg};color:{ok_color};font-weight:bold;">{ok_symbol}</td>'
+            f'</tr>'
         )
 
-    send('\n'.join(table_lines), delay=0.5)
-    write_log('[va_pd] 發送難度鑑別度總表（含學生作答）')
+    th = 'style="padding:8px 12px;border:1px solid #ccc;background:#f0f0f0;text-align:left;"'
+    html = (
+        '__HTML__'
+        '<p style="margin:0 0 8px;font-weight:bold;">各題難度與鑑別度總覽：</p>'
+        '<table style="border-collapse:collapse;width:100%;font-size:14px;font-family:sans-serif;">'
+        '<thead><tr>'
+        f'<th {th}>題目</th>'
+        f'<th {th}>難度P</th>'
+        f'<th {th}>鑑別度D</th>'
+        f'<th {th}>評價</th>'
+        f'<th {th}>你計算的p,D值</th>'
+        f'<th {th} style="padding:8px 12px;border:1px solid #ccc;background:#f0f0f0;text-align:center;">p,D計算是否正確</th>'
+        '</tr></thead>'
+        '<tbody>' + ''.join(rows_html) + '</tbody>'
+        '</table>'
+    )
+
+    send(html, delay=0.5)
+    write_log('[va_pd] 發送難度鑑別度總表（HTML，含學生作答）')
 
     for q_key, ur in user_pd_results.items():
         write_log(
