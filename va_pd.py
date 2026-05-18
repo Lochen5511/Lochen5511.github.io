@@ -438,6 +438,19 @@ def main():
         ok_symbol  = '✓' if is_correct else '✗'
         ok_color   = '#6abf69' if is_correct else '#bf6a6a'
         ok_bg      = 'rgba(106,191,105,0.18)' if is_correct else 'rgba(191,106,106,0.18)'
+        # 合併後的顯示字串：(p,d) 答對→綠底✓，答錯→紅底✗ + 正確答案
+        if is_correct:
+            merged_inner = (
+                f'<span style="background:{ok_bg};color:{ok_color};"
+                      > ({user_p},{user_d}) ✓</span>'
+            )
+        else:
+            merged_inner = (
+                f'<span style="background:{ok_bg};color:{ok_color};"
+                      > ({user_p},{user_d}) ✗</span>'
+                f'<br><span style="font-size:11px;color:rgba(248,244,236,0.5);"
+                           >正確：({val["p"]},{val["d"]})</span>'
+            )
         rows_html.append(
             f'<tr>'
             f'<td style="{TD}">{q_key}</td>'
@@ -446,8 +459,7 @@ def main():
             f'<td style="{TD}">'
             f'<span style="background:{bg};color:{fg};padding:2px 8px;border-radius:4px;font-size:13px;">{label}</span>'
             f'</td>'
-            f'<td style="{TD}">({user_p},{user_d})</td>'
-            f'<td style="{TDC}background:{ok_bg};color:{ok_color};font-weight:bold;">{ok_symbol}</td>'
+            f'<td style="{TDC}padding:6px 12px;">{merged_inner}</td>'
             f'</tr>'
         )
 
@@ -462,8 +474,7 @@ def main():
         f'<th style="{TH}">難度P</th>'
         f'<th style="{TH}">鑑別度D</th>'
         f'<th style="{TH}">評價</th>'
-        f'<th style="{TH}">你計算的p,D值</th>'
-        f'<th style="{THC}">p,D計算是否正確</th>'
+        f'<th style="{THC}">p,D值計算與批改</th>'
         '</tr></thead>'
         '<tbody>' + ''.join(rows_html) + '</tbody>'
         '</table>'
