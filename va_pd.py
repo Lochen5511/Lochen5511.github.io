@@ -439,18 +439,15 @@ def main():
         ok_color   = '#6abf69' if is_correct else '#bf6a6a'
         ok_bg      = 'rgba(106,191,105,0.18)' if is_correct else 'rgba(191,106,106,0.18)'
         # 合併後的顯示字串：(p,d) 答對→綠底✓，答錯→紅底✗ + 正確答案
+        st = f'background:{ok_bg};color:{ok_color};padding:2px 8px;border-radius:4px;'
+        symbol = '✓' if is_correct else '✗'
+        ans_span = f'<span style="{st}">({user_p},{user_d}) {symbol}</span>'
         if is_correct:
-            merged_inner = (
-                f'<span style="background:{ok_bg};color:{ok_color};"
-                      > ({user_p},{user_d}) ✓</span>'
-            )
+            merged_inner = ans_span
         else:
-            merged_inner = (
-                f'<span style="background:{ok_bg};color:{ok_color};"
-                      > ({user_p},{user_d}) ✗</span>'
-                f'<br><span style="font-size:11px;color:rgba(248,244,236,0.5);"
-                           >正確：({val["p"]},{val["d"]})</span>'
-            )
+            hint_st = 'font-size:11px;color:rgba(248,244,236,0.5);'
+            correct_hint = f'<br><span style="{hint_st}">正確：({val["p"]},{val["d"]})</span>'
+            merged_inner = ans_span + correct_hint
         rows_html.append(
             f'<tr>'
             f'<td style="{TD}">{q_key}</td>'
