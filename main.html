@@ -140,6 +140,10 @@
       word-break: break-word; white-space: pre-wrap; overflow-wrap: anywhere;
       width: fit-content; max-width: 100%;
     }
+    .bubble.html-bubble {
+      white-space: normal;
+      width: 100%;
+    }
     .msg.ai   .bubble {
       background: var(--ai-bg); border: 1px solid var(--border);
       border-top-left-radius: 4px; color: var(--cream);
@@ -869,6 +873,7 @@
     const isDropdown = text.startsWith('__DROPDOWN__');
     const isCheckbox = text.startsWith('__CHECKBOX__');
     const isData     = text.startsWith('__DATA__');
+    const isHtml     = text.startsWith('__HTML__');   // ← 新增
     let content = '';
 
     if (isCheckbox) {
@@ -898,6 +903,9 @@
         }
       } catch(e) { console.warn('[data parse]', e); }
       return;
+    } else if (isHtml) {
+      // ── __HTML__ 前綴：直接渲染 HTML，關閉 pre-wrap ──
+      content = `<div class="bubble html-bubble">${text.slice(8)}</div>`;
     } else if (isDropdown) {
       const raw         = text.replace('__DROPDOWN__', '');
       const parts       = raw.split('||');
@@ -1089,7 +1097,7 @@
 
   if (!sessionId) { window.location.href = 'enter.html'; }
 
-  /* ── Poll（每 300ms）── */
+  /* ── Poll（每 1000ms）── */
   setInterval(async () => {
     if (!sessionId) return;
     try {
@@ -1104,6 +1112,9 @@
           logMsg('ai', `[ALERT] ${alertText}`);
         } else if (data.message.startsWith('__DATA__')) {
           appendMsg(data.message, 'ai');
+        } else if (data.message.startsWith('__HTML__')) {
+          appendMsg(data.message, 'ai');
+          logMsg('ai', '[HTML TABLE]');
         } else {
           appendMsg(data.message, 'ai');
           logMsg('ai', data.message);
@@ -1111,7 +1122,6 @@
       } else if (data.thinking) {
         if (!typingBubble) typingBubble = appendTyping();
       } else if (!data.thinking && typingBubble) {
-        // 只有後端明確表示不在思考時才移除
         removeTyping();
       }
 
