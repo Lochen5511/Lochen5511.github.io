@@ -446,7 +446,7 @@ def main():
             merged_inner = ans_span
         else:
             hint_st = 'font-size:11px;color:rgba(248,244,236,0.5);'
-            correct_hint = f'<br><span style="{hint_st}">正確：({val["p"]},{val["d"]})</span>'
+            correct_hint = f'<br><span style="{hint_st}">答案：({val["p"]},{val["d"]})</span>'
             merged_inner = ans_span + correct_hint
         rows_html.append(
             f'<tr>'
