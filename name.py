@@ -221,6 +221,7 @@ def enter_id():
     log_path = record['log_path']
 
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:8]
+    register_session(username, session_id, log_path)
 
     write_log(log_path, f'[ID 驗證] 以 ID {return_id} 進入第二階段 session={session_id}')
     print(f"[enter_id] return_id={return_id} user={username} new_session={session_id}")
