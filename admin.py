@@ -34,7 +34,9 @@ print(f"[admin.py] 啟動  user={username}  session={session_id}")
 
 BACKEND  = 'http://localhost:5000'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_DIR  = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+from pathlib import Path
+
+LOG_DIR = Path(__file__).parent.parent / "log"
 
 
 # ──────────────────────────────────────────

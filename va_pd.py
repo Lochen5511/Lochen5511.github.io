@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 # ──────────────────────────────────────────
 # 環境變數 & OpenAI
 # ──────────────────────────────────────────
-load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ──────────────────────────────────────────
 # 接收變數

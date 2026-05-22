@@ -51,7 +51,9 @@ ALL_CODES     = ['V1a', 'V1b', 'V1c', 'V2a', 'V2b', 'X1', 'V3a', 'V3b']
 V2_ITEMS      = {'V2_1', 'V2_2'}
 
 # wide_table 固定存於此路徑，全用戶共用
-LOG_DIR    = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+from pathlib import Path
+
+LOG_DIR = Path(__file__).parent.parent / "log"
 WIDE_TABLE = os.path.join(LOG_DIR, 'validity_wide_table.csv')
 
 WIDE_TABLE_HEADER = [

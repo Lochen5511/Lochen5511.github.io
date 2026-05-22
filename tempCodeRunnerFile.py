@@ -15,7 +15,9 @@ def add_cors_headers(response):
     response.headers['bypass-tunnel-reminder']       = 'true'
     return response
 
-LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+from pathlib import Path
+
+LOG_DIR = Path(__file__).parent.parent / "log"
 
 # 每個 session 有自己獨立的訊息隊列
 message_queues = defaultdict(list)

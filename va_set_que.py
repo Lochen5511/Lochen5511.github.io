@@ -22,8 +22,8 @@ print(f"[set_que.py] 啟動  user={username}  session={session_id}")
 BACKEND      = 'http://localhost:5000'
 USER_TIMEOUT = 300
 TOTAL_QUE    = 8
-
-LOG_DIR = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+from pathlib import Path
+LOG_DIR = Path(__file__).parent.parent / "log"
 
 # que_set_log 路徑（全域，init_que_log() 設定後使用）
 que_log_path = ''

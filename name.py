@@ -7,7 +7,9 @@ from datetime import datetime
 # ──────────────────────────────────────────
 # 設定
 # ──────────────────────────────────────────
-LOG_DIR   = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+from pathlib import Path
+
+LOG_DIR = Path(__file__).parent.parent / "log"
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 DB_PATH   = os.path.join(LOG_DIR, 'session_db.json')
 
@@ -94,15 +96,15 @@ def _db_update(update_fn):
 
 def register_session(username: str, session_id: str, log_path: str):
     def _update(db):
+        relative_path = Path(log_path).relative_to(LOG_DIR).as_posix()
         db[session_id] = {
             'username':  username,
-            'log_path':  log_path,
+            'log_path':  relative_path,   # ← 改這裡
             'created':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'unit':      None,
             'return_id': None,
         }
     _db_update(_update)
-    print(f"[db] 登記 session={session_id} user={username}")
 
 def update_session_unit(session_id: str, unit: str):
     def _update(db):
@@ -138,12 +140,20 @@ def lookup_return_id(return_id: str) -> dict | None:
     index = db.get('__return_index__', {})
     session_id = index.get(return_id)
     if session_id:
-        return db.get(session_id)
+        record = db.get(session_id)
+        if record and record.get('log_path'):
+            # 還原絕對路徑
+            record['log_path'] = str(LOG_DIR / record['log_path'])
+        return record
     return None
 
 def lookup_session(session_id: str) -> dict | None:
     db = load_db()
-    return db.get(session_id)
+    record = db.get(session_id)
+    if record and record.get('log_path'):
+        # 還原絕對路徑
+        record['log_path'] = str(LOG_DIR / record['log_path'])
+    return record
 
 
 # ──────────────────────────────────────────

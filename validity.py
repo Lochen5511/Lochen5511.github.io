@@ -429,8 +429,9 @@ def _send_result_email(to_addr, username, correct, total, avg_conf, return_id):
     from email.mime.multipart import MIMEMultipart
     from email.header import Header
     from dotenv import load_dotenv
+    from pathlib import Path
 
-    load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+    load_dotenv(Path(__file__).parent.parent / ".env")
     TAMAIL   = os.getenv('TAMAIL')
     MAILPASS = os.getenv('MAILPASS')
 

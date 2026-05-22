@@ -10,7 +10,9 @@ from datetime import datetime
 # ──────────────────────────────────────────
 # 環境變數 & OpenAI
 # ──────────────────────────────────────────
-load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 openai.api_key = os.getenv("AIKEY")
 
 # ──────────────────────────────────────────
@@ -136,7 +138,7 @@ def ask_openai(system_prompt, user_prompt, model='gpt-4o', temperature=0.7):
         return None
 
 
-LOG_DIR      = r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\log"
+LOG_DIR = Path(__file__).parent.parent / "log"
 WIDE_TABLE   = os.path.join(LOG_DIR, 'validity_wide_table.csv')
 MAX_STUDENTS = 30
 

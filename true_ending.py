@@ -24,7 +24,9 @@ session_id = args.session_id
 log_path   = args.log_path
 BACKEND = 'http://localhost:5000'
 
-load_dotenv(r"C:\Users\Procidens_Pulvis\Desktop\TxT\website_AI\.env")
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 openai.api_key = os.getenv("AIKEY")
 
 print(f"[true_ending.py] 啟動  user={username}  session={session_id}")
