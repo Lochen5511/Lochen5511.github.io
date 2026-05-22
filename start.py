@@ -1,9 +1,9 @@
 # start.py
-import subprocess, threading, re, json, sys
+import subprocess, threading, re, json, sys, os
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).parent / "config.json"       # 與 name.py 同層
-REPO_DIR    = Path(__file__).parent.parent                # git repo 根目錄
+REPO_DIR    = Path(__file__).parent                       # git repo 根目錄（同層）
 
 def update_config(url: str):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -44,11 +44,16 @@ def watch_cloudflared(proc):
         sys.exit(1)
 
 if __name__ == "__main__":
+    # 修正 Windows 編碼問題
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
     print("🚇 啟動 cloudflared tunnel...")
     cf = subprocess.Popen(
         ["cloudflared", "tunnel", "--url", "http://localhost:5000"],
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",       # ← 修正 cp950 問題
+        errors="replace",       # ← 無法解碼的字元用 ? 取代，不會崩潰
         bufsize=1,
     )
 
