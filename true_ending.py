@@ -988,9 +988,18 @@ def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
 
     try:
         with open(out_path, 'w', encoding='utf-8') as f:
-            for n in sorted(original_que_data.keys()):
-                q_key = f'Q{n}'
-                q     = dict(original_que_data[n])   # 複製原始資料
+            def normalize_key(key):
+                if isinstance(key, int):
+                    return f'Q{key}'
+                key_str = str(key)
+                return key_str if key_str.startswith('Q') else f'Q{key_str}'
+
+            sorted_keys = sorted(original_que_data.keys(),
+                                 key=lambda x: int(str(x).lstrip('Q')))
+
+            for key in sorted_keys:
+                q_key = normalize_key(key)
+                q     = dict(original_que_data[key])   # 複製原始資料
 
                 # 若此題有修改，覆蓋對應欄位
                 if q_key in all_revised:
@@ -1138,15 +1147,16 @@ def _qa_build_questions(que_data: dict) -> list:
 
 def _qa_save_answer_matrix(answers: list, round_tag: str = 'r2') -> str:
     """儲存作答矩陣，回傳路徑"""
-    ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_path = os.path.join(session_dir, f"{username}_AnswerMatrix_{round_tag}_{ts}.csv")
-    header   = [f'Q{i+1}' for i in range(8)] + ['Total']
+    ts             = datetime.now().strftime('%Y%m%d_%H%M%S')
+    out_path       = os.path.join(session_dir, f"{username}_AnswerMatrix_{round_tag}_{ts}.csv")
+    question_count = len(answers[0]) if answers else 8
+    header         = [f'Q{i+1}' for i in range(question_count)] + ['Total']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(header)
             for row in answers:
-                binary = [1 if ans == 'A' else 0 for ans in row[:8]]
+                binary = [1 if ans == 'A' else 0 for ans in row[:question_count]]
                 writer.writerow(binary + [sum(binary)])
         print(f'[AnswerMatrix_r2] 已儲存：{out_path}（{len(answers)} 筆）')
         _write_log(f'[true_ending] AnswerMatrix_r2 已儲存：{out_path}')
@@ -1166,7 +1176,7 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
         return [], []
 
     questions = _qa_build_questions(revised_que_data)
-    if len(questions) < 8:
+    if len(questions) == 0:
         print(f'[_qa_run_twins] 題數不足：{len(questions)}')
         return [], questions
 
@@ -1209,7 +1219,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
     send_button(
         label     = '讓孿生班級再寫一次',
         color     = 'gold',
-        size      = 'large',
+        size      = 'medium',
         button_id = 'btn_run_second_round',
         delay     = 0.5,
     )
@@ -1250,9 +1260,10 @@ def run_second_round(all_revised: dict, original_que_data: dict):
 
     # ── 推送統計資料到前端 ──
     import json
-    correct_answers = ['A'] * 8
+    question_count = len(all_answers[0]) if all_answers else 0
+    correct_answers = ['A'] * question_count
     stats = {}
-    for q_idx in range(8):
+    for q_idx in range(question_count):
         key    = f'Q{q_idx+1}'
         counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
         for row in all_answers:
