@@ -9,6 +9,7 @@ import csv
 import random
 from dotenv import load_dotenv
 import openai
+import json
 
 # ──────────────────────────────────────────
 # 接收變數
@@ -680,6 +681,27 @@ def main():
     pd_data  = load_pd_report(pd_txt_path)
     que_data = load_que_log(que_log_path)
     weak     = find_weak_questions(pd_data, que_data)
+
+    # 若 PD 報告或題庫存在，主動推送為 __DATA__ 結構，避免時序 race
+    try:
+        if pd_data:
+            _post('/push', {
+                'text':     f"__DATA__{json.dumps({'type':'pd_report','items':pd_data}, ensure_ascii=False)}",
+                'username': username,
+                'session_id': session_id,
+                'log_path': ''
+            })
+            print(f"[true_ending] 已推送 PD 報告，共 {len(pd_data)} 題")
+        if que_data:
+            _post('/push', {
+                'text':     f"__DATA__{json.dumps({'type':'que_log','questions':que_data}, ensure_ascii=False)}",
+                'username': username,
+                'session_id': session_id,
+                'log_path': ''
+            })
+            print(f"[true_ending] 已推送 題庫報告，共 {len(que_data)} 題")
+    except Exception as e:
+        print(f"[true_ending] 推送 PD/題庫為 __DATA__ 時發生錯誤：{e}")
 
     send(f'歡迎回來，{username}！我是艾評。', delay=1)
     # ── 重新推送第一輪 AnswerMatrix 資料到側邊欄 ──
