@@ -45,6 +45,18 @@ que_log_path = os.path.join(session_dir, f"{old_session_id}_que_set_log.txt")
 print(f"[true_ending] PD 報告路徑：{pd_txt_path}")
 print(f"[true_ending] 題庫路徑：  {que_log_path}")
 
+# 若 que_set_log 不存在，嘗試在 session_dir 中尋找任意 "*_que_set_log.txt" 作為 fallback
+if not os.path.exists(que_log_path):
+    try:
+        for fn in os.listdir(session_dir):
+            if fn.endswith('_que_set_log.txt'):
+                alt = os.path.join(session_dir, fn)
+                print(f"[true_ending] que_set_log 未找到，使用備援：{alt}")
+                que_log_path = alt
+                break
+    except Exception as e:
+        print(f"[true_ending] 檢查 session_dir 時發生錯誤：{e}")
+
 # ──────────────────────────────────────────
 # 工具函數
 # ──────────────────────────────────────────
@@ -596,6 +608,36 @@ def load_pd_report(path: str) -> dict:
     return result
 
 
+def _extract_pd_from_log(logfile: str) -> dict:
+    """嘗試從一般 session log 中擷取類似 PD 報告的行。
+    會尋找含有 '｜' 分隔且第二／第三欄可解析為 float 的行。
+    """
+    out = {}
+    if not os.path.exists(logfile):
+        return out
+    try:
+        with open(logfile, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '｜' not in line:
+                    continue
+                parts = [p.strip() for p in line.split('｜')]
+                if len(parts) < 4:
+                    continue
+                key = parts[0].replace('\u3000','').replace(' ','')
+                try:
+                    p_val = float(parts[1])
+                    d_val = float(parts[2])
+                except ValueError:
+                    continue
+                out[key] = {'p': p_val, 'd': d_val, 'label': parts[3]}
+    except Exception as e:
+        print(f"[true_ending] 從 log 擷取 PD 失敗：{e}")
+    if out:
+        print(f"[true_ending] 從 session log 擷取到 PD：{len(out)} 題")
+    return out
+
+
 # ──────────────────────────────────────────
 # 讀取題庫 log
 # ──────────────────────────────────────────
@@ -679,6 +721,8 @@ def find_weak_questions(pd_data: dict, que_data: dict, threshold=0.25) -> list:
 # ──────────────────────────────────────────
 def main():
     pd_data  = load_pd_report(pd_txt_path)
+    if not pd_data:
+        pd_data = _extract_pd_from_log(pd_txt_path)
     que_data = load_que_log(que_log_path)
     weak     = find_weak_questions(pd_data, que_data)
 
