@@ -692,7 +692,6 @@
             .replace(/\n/g,'<br>');
   }
 
-  /* 渲染訊息文字，將 __LINK__{path}||{label} 轉為可點擊下載連結 */
   function renderText(text) {
     const parts = text.split(/(__LINK__[^\n]*)/g);
     return parts.map(part => {
@@ -732,10 +731,203 @@
     document.getElementById('studentsPanel').classList.toggle('open', studentsPanelOpen);
   }
 
+  /* ── 圖表顏色 ── */
+  const PIE_COLORS = {
+    A: 'rgba(201,168,76,0.85)',
+    B: 'rgba(106,170,191,0.85)',
+    C: 'rgba(106,191,105,0.85)',
+    D: 'rgba(191,106,106,0.85)',
+  };
+
+  const chartInstances = {};
+
+  /* ── 單輪渲染（que_ana.py 使用）── */
   function renderStudents(students, correct) {
     const body = document.getElementById('studentsPanelBody');
     body.innerHTML = '';
+    _appendStudentCards(body, students, correct);
 
+    const footer = document.createElement('div');
+    footer.className = 'students-footer';
+    const avgScore = students.length
+      ? (students.reduce((s, r) => s + r.score, 0) / students.length).toFixed(2)
+      : 0;
+    footer.textContent = `共 ${students.length} 位學生｜平均得分 ${avgScore}`;
+    body.appendChild(footer);
+
+    document.getElementById('studentsTab').classList.add('visible');
+  }
+
+  function renderCharts(stats, nStudents) {
+    const body = document.getElementById('statsPanelBody');
+    body.innerHTML = '';
+    Object.values(chartInstances).forEach(c => c.destroy());
+
+    const keys = Object.keys(stats).sort((a, b) =>
+      parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', ''))
+    );
+
+    keys.forEach((key, idx) => {
+      _appendChartBlock(body, key, idx + 1, stats[key], '');
+    });
+
+    const footer = document.createElement('div');
+    footer.className   = 'stats-footer';
+    footer.textContent = `共 ${nStudents} 位孿生學生作答`;
+    body.appendChild(footer);
+
+    document.getElementById('statsTab').classList.add('visible');
+  }
+
+  /* ── 合併兩輪渲染（true_ending.py 使用）── */
+  function renderChartsCombined(r1Stats, r1N, r2Stats, r2N) {
+    const body = document.getElementById('statsPanelBody');
+    body.innerHTML = '';
+    Object.values(chartInstances).forEach(c => c.destroy());
+
+    const keys = Object.keys(r1Stats).sort((a, b) =>
+      parseInt(a.replace('Q', '')) - parseInt(b.replace('Q', ''))
+    );
+
+    /* ── 第一輪標題 ── */
+    const h1 = document.createElement('div');
+    h1.className = 'chart-label';
+    h1.style.cssText = 'font-size:14px;color:var(--gold);margin-bottom:4px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:6px;';
+    h1.textContent = '── 第一輪（修改前）──';
+    body.appendChild(h1);
+
+    keys.forEach((key, idx) => {
+      _appendChartBlock(body, key, idx + 1, r1Stats[key], 'r1_');
+    });
+
+    const footer1 = document.createElement('div');
+    footer1.className   = 'stats-footer';
+    footer1.textContent = `共 ${r1N} 位孿生學生作答`;
+    body.appendChild(footer1);
+
+    /* ── 分隔線 ── */
+    const sep = document.createElement('hr');
+    sep.style.cssText = 'border:none;border-top:1px solid var(--border);margin:16px 0;';
+    body.appendChild(sep);
+
+    /* ── 第二輪標題 ── */
+    const h2 = document.createElement('div');
+    h2.className = 'chart-label';
+    h2.style.cssText = 'font-size:14px;color:#6abf69;margin-bottom:4px;letter-spacing:0.2em;border-bottom:1px solid var(--border);padding-bottom:6px;';
+    h2.textContent = '── 第二輪（修改後）──';
+    body.appendChild(h2);
+
+    keys.forEach((key, idx) => {
+      const r2Counts = r2Stats[key] || { A: 0, B: 0, C: 0, D: 0 };
+      _appendChartBlock(body, key, idx + 1, r2Counts, 'r2_');
+    });
+
+    const footer2 = document.createElement('div');
+    footer2.className   = 'stats-footer';
+    footer2.textContent = `共 ${r2N} 位孿生學生作答`;
+    body.appendChild(footer2);
+
+    document.getElementById('statsTab').classList.add('visible');
+  }
+
+  function renderStudentsCombined(r1Students, r2Students, correct) {
+    const body = document.getElementById('studentsPanelBody');
+    body.innerHTML = '';
+
+    /* ── 第一輪 ── */
+    const h1 = document.createElement('div');
+    h1.style.cssText = 'font-family:"Cormorant Garamond",serif;font-size:13px;letter-spacing:0.2em;color:var(--gold);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:6px;';
+    h1.textContent = '── 第一輪（修改前）──';
+    body.appendChild(h1);
+
+    _appendStudentCards(body, r1Students, correct);
+
+    const avg1 = r1Students.length
+      ? (r1Students.reduce((s, r) => s + r.score, 0) / r1Students.length).toFixed(2)
+      : 0;
+    const f1 = document.createElement('div');
+    f1.className   = 'students-footer';
+    f1.textContent = `共 ${r1Students.length} 位學生｜平均得分 ${avg1}`;
+    body.appendChild(f1);
+
+    /* ── 分隔線 ── */
+    const sep = document.createElement('hr');
+    sep.style.cssText = 'border:none;border-top:1px solid var(--border);margin:14px 0;';
+    body.appendChild(sep);
+
+    /* ── 第二輪 ── */
+    const h2 = document.createElement('div');
+    h2.style.cssText = 'font-family:"Cormorant Garamond",serif;font-size:13px;letter-spacing:0.2em;color:#6abf69;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:6px;';
+    h2.textContent = '── 第二輪（修改後）──';
+    body.appendChild(h2);
+
+    _appendStudentCards(body, r2Students, correct);
+
+    const avg2 = r2Students.length
+      ? (r2Students.reduce((s, r) => s + r.score, 0) / r2Students.length).toFixed(2)
+      : 0;
+    const f2 = document.createElement('div');
+    f2.className   = 'students-footer';
+    f2.textContent = `共 ${r2Students.length} 位學生｜平均得分 ${avg2}`;
+    body.appendChild(f2);
+
+    document.getElementById('studentsTab').classList.add('visible');
+  }
+
+  /* ── 共用子函數 ── */
+  function _appendChartBlock(body, key, qNum, counts, prefix) {
+    const labels = Object.keys(counts);
+    const values = Object.values(counts);
+
+    const block = document.createElement('div');
+    block.className = 'chart-block';
+
+    const lbl = document.createElement('div');
+    lbl.className   = 'chart-label';
+    lbl.textContent = `第 ${qNum} 題`;
+    block.appendChild(lbl);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-wrap';
+    const canvas = document.createElement('canvas');
+    canvas.id = `bar_${prefix}${key}`;
+    wrap.appendChild(canvas);
+    block.appendChild(wrap);
+    body.appendChild(block);
+
+    chartInstances[`${prefix}${key}`] = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data:            values,
+          backgroundColor: labels.map(l => PIE_COLORS[l] || '#888'),
+          borderColor:     labels.map(l => PIE_COLORS[l] || '#888'),
+          borderWidth: 1, borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} 人` } }
+        },
+        scales: {
+          x: {
+            ticks: { color: 'rgba(240,235,224,0.6)', font: { size: 13 } },
+            grid:  { color: 'rgba(201,168,76,0.08)' },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: 'rgba(240,235,224,0.6)', font: { size: 11 }, stepSize: 1, precision: 0 },
+            grid:  { color: 'rgba(201,168,76,0.08)' },
+          }
+        }
+      }
+    });
+  }
+
+  function _appendStudentCards(body, students, correct) {
     students.forEach(s => {
       const card = document.createElement('div');
       card.className = 'student-card';
@@ -770,97 +962,6 @@
       card.appendChild(answersEl);
       body.appendChild(card);
     });
-
-    const footer = document.createElement('div');
-    footer.className   = 'students-footer';
-    const avgScore = students.length
-      ? (students.reduce((s, r) => s + r.score, 0) / students.length).toFixed(2)
-      : 0;
-    footer.textContent = `共 ${students.length} 位學生｜平均得分 ${avgScore}`;
-    body.appendChild(footer);
-
-    document.getElementById('studentsTab').classList.add('visible');
-  }
-
-  /* ── 圓餅圖顏色 ── */
-  const PIE_COLORS = {
-    A: 'rgba(201,168,76,0.85)',
-    B: 'rgba(106,170,191,0.85)',
-    C: 'rgba(106,191,105,0.85)',
-    D: 'rgba(191,106,106,0.85)',
-  };
-
-  const chartInstances = {};
-
-  function renderCharts(stats, nStudents) {
-    const body = document.getElementById('statsPanelBody');
-    body.innerHTML = '';
-    Object.values(chartInstances).forEach(c => c.destroy());
-
-    const keys = Object.keys(stats).sort((a,b) =>
-      parseInt(a.replace('Q','')) - parseInt(b.replace('Q',''))
-    );
-
-    keys.forEach((key, idx) => {
-      const counts = stats[key];
-      const labels = Object.keys(counts);
-      const values = Object.values(counts);
-      const qNum   = idx + 1;
-
-      const block = document.createElement('div');
-      block.className = 'chart-block';
-
-      const lbl = document.createElement('div');
-      lbl.className   = 'chart-label';
-      lbl.textContent = `第 ${qNum} 題`;
-      block.appendChild(lbl);
-
-      const wrap = document.createElement('div');
-      wrap.className = 'chart-wrap';
-      const canvas = document.createElement('canvas');
-      canvas.id = `bar_${key}`;
-      wrap.appendChild(canvas);
-      block.appendChild(wrap);
-      body.appendChild(block);
-
-      chartInstances[key] = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            data:            values,
-            backgroundColor: labels.map(l => PIE_COLORS[l] || '#888'),
-            borderColor:     labels.map(l => PIE_COLORS[l] || '#888'),
-            borderWidth: 1, borderRadius: 4,
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: { label: ctx => ` ${ctx.raw} 人` } }
-          },
-          scales: {
-            x: {
-              ticks: { color: 'rgba(240,235,224,0.6)', font: { size: 13 } },
-              grid:  { color: 'rgba(201,168,76,0.08)' },
-            },
-            y: {
-              beginAtZero: true,
-              ticks: { color: 'rgba(240,235,224,0.6)', font: { size: 11 }, stepSize: 1, precision: 0 },
-              grid: { color: 'rgba(201,168,76,0.08)' },
-            }
-          }
-        }
-      });
-    });
-
-    const footer = document.createElement('div');
-    footer.className   = 'stats-footer';
-    footer.textContent = `共 ${nStudents} 位孿生學生作答`;
-    body.appendChild(footer);
-
-    document.getElementById('statsTab').classList.add('visible');
   }
 
   /* ── Append message ── */
@@ -877,7 +978,7 @@
     const isPanel    = text.startsWith('__PANEL__');
     let content = '';
 
-    if (isPanel) return;  // 純 UI 指令，不渲染訊息
+    if (isPanel) return;
     if (isCheckbox) {
       const raw    = text.replace('__CHECKBOX__', '');
       const parts  = raw.split('||');
@@ -902,11 +1003,20 @@
           if (payload.students && payload.students.length > 0) {
             renderStudents(payload.students, payload.correct || []);
           }
+        } else if (payload.type === 'answer_matrix_combined') {
+          renderChartsCombined(
+            payload.round1.stats, payload.round1.n_students,
+            payload.round2.stats, payload.round2.n_students,
+          );
+          renderStudentsCombined(
+            payload.round1.students,
+            payload.round2.students,
+            payload.correct || [],
+          );
         }
       } catch(e) { console.warn('[data parse]', e); }
       return;
     } else if (isHtml) {
-      // ── __HTML__ 前綴：直接渲染 HTML，關閉 pre-wrap ──
       content = `<div class="bubble html-bubble">${text.slice(8)}</div>`;
     } else if (isDropdown) {
       const raw         = text.replace('__DROPDOWN__', '');
@@ -1058,7 +1168,6 @@
     }
     btn.textContent = '✓ ' + label;
 
-    // 跳轉按鈕：直接跳轉，不送出訊息
     if (buttonId === 'btn_goto_enter') {
       window.location.href = 'enter.html';
       return;
@@ -1078,14 +1187,12 @@
     } catch(e) { console.warn(`[post ${path}]`, e.message); }
   }
 
-  /* ── 用戶操作後短暫保護 typing bubble 不被 poll 移除 ── */
   let userJustActed = false;
-
   function markUserActed() {
     userJustActed = true;
     setTimeout(() => { userJustActed = false; }, 1500);
   }
-  /* 修改：加入時間戳記，並擴大涵蓋範圍至 __ALERT__ 與所有 AI 訊息 */
+
   function logMsg(role, message) {
     const now = new Date();
     const ts  = now.getFullYear()
@@ -1120,7 +1227,6 @@
           else if (target === 'students' && !studentsPanelOpen) toggleStudentsPanel();
           else if (target === 'stats_close' && panelOpen) togglePanel();
           else if (target === 'students_close' && studentsPanelOpen) toggleStudentsPanel();
-          // 不 appendMsg，不 logMsg，純 UI 指令
         } else if (data.message.startsWith('__HTML__')) {
           appendMsg(data.message, 'ai');
           logMsg('ai', '[HTML TABLE]');

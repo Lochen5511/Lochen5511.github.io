@@ -265,6 +265,71 @@ def load_validity_wide_table() -> list:
     except Exception as e:
         print(f"[true_ending] validity_wide_table 讀取失敗：{e}")
         return []
+    
+def _push_existing_answer_matrix():
+    """讀取第一輪 AnswerMatrix.csv，重新推送 __DATA__ 讓側邊欄顯示第一輪資料。"""
+    import csv, json
+
+    matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
+    if not os.path.exists(matrix_path):
+        print(f"[_push_existing] AnswerMatrix 不存在：{matrix_path}")
+        return
+
+    all_answers = []
+    try:
+        with open(matrix_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            rows   = list(reader)
+        # 第一列是 header（Q1,Q2,...,Total），跳過
+        for row in rows[1:]:
+            if not row:
+                continue
+            # binary 轉回 A/非A（只需判斷對錯，用 A 代表答對）
+            answers = ['A' if cell == '1' else 'B' for cell in row[:8]]
+            all_answers.append(answers)
+    except Exception as e:
+        print(f"[_push_existing] 讀取失敗：{e}")
+        return
+
+    if not all_answers:
+        print("[_push_existing] AnswerMatrix 無資料")
+        return
+
+    correct_answers = ['A'] * 8
+    stats = {}
+    for q_idx in range(8):
+        key    = f'Q{q_idx+1}'
+        counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
+        for row in all_answers:
+            ans = row[q_idx] if q_idx < len(row) else None
+            if ans in counts:
+                counts[ans] += 1
+        stats[key] = counts
+
+    students = [
+        {
+            'id':      i + 1,
+            'answers': row,
+            'score':   sum(1 for qi, a in enumerate(row) if qi < 8 and a == correct_answers[qi]),
+        }
+        for i, row in enumerate(all_answers)
+    ]
+
+    push_data = json.dumps({
+        'type':       'answer_matrix',
+        'stats':      stats,
+        'n_students': len(all_answers),
+        'students':   students,
+        'correct':    correct_answers,
+    }, ensure_ascii=False)
+
+    _post('/push', {
+        'text':       f'__DATA__{push_data}',
+        'username':   username,
+        'session_id': session_id,
+        'log_path':   '',
+    })
+    print(f"[_push_existing] 已推送第一輪資料，共 {len(all_answers)} 筆")
 
 
 def pick_student(answers: list, q_idx: int, target: str) -> dict | None:
@@ -302,7 +367,7 @@ def call_ai_student(student: dict, q_info: dict, user_question: str) -> str:
     role_constraint = (
         '你答錯了這題，回答時必須展現出錯誤的理解，不能說出正確答案或承認自己錯了。'
         if is_wrong else
-        '你答對了這題，回答時必須展現出正確的理解。'
+        '你答對了這題，回答時必須展現出正確的理解，並解釋你為何沒選別的選項'
     )
 
     system_prompt = f"""你是一位正在接受測驗的學生，請依據以下認知數值扮演這位學生。
@@ -617,6 +682,8 @@ def main():
     weak     = find_weak_questions(pd_data, que_data)
 
     send(f'歡迎回來，{username}！我是艾評。', delay=1)
+    # ── 重新推送第一輪 AnswerMatrix 資料到側邊欄 ──
+    _push_existing_answer_matrix()
     send_panel('stats')
     send_panel('students')
     send('上次課程中，我們已經完成了鑑別度的計算。', delay=0.5)
