@@ -638,6 +638,49 @@ def _extract_pd_from_log(logfile: str) -> dict:
     return out
 
 
+def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
+    matrix_path = os.path.join(session_dir, f"{user_name}_AnswerMatrix.csv")
+    if not os.path.exists(matrix_path):
+        print(f"[true_ending] AnswerMatrix 不存在：{matrix_path}")
+        return {}
+
+    answers = []
+    try:
+        with open(matrix_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+        for row in rows[1:]:
+            if not row:
+                continue
+            answers.append(row[:8])
+    except Exception as e:
+        print(f"[true_ending] 讀取 AnswerMatrix 失敗：{e}")
+        return {}
+
+    n = len(answers)
+    if n == 0:
+        print(f"[true_ending] AnswerMatrix 無作答資料")
+        return {}
+
+    scores = [sum(1 for ans in row if ans == '1') for row in answers]
+    sorted_idx = sorted(range(n), key=lambda i: scores[i])
+    low_idx = sorted_idx[:10]
+    high_idx = sorted_idx[-10:]
+
+    result = {}
+    for q_idx in range(8):
+        q_key = f'Q{q_idx + 1}'
+        correct_count = sum(1 for row in answers if len(row) > q_idx and row[q_idx] == '1')
+        p = round(correct_count / n, 3)
+        high_correct = sum(1 for i in high_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
+        low_correct = sum(1 for i in low_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
+        d = round(high_correct / 10 - low_correct / 10, 3)
+        result[q_key] = {'p': p, 'd': d, 'label': ''}
+
+    print(f"[true_ending] 從 AnswerMatrix 計算 PD：{len(result)} 題")
+    return result
+
+
 # ──────────────────────────────────────────
 # 讀取題庫 log
 # ──────────────────────────────────────────
@@ -723,6 +766,11 @@ def main():
     pd_data  = load_pd_report(pd_txt_path)
     if not pd_data:
         pd_data = _extract_pd_from_log(pd_txt_path)
+    if not pd_data:
+        pd_data = _compute_pd_from_answer_matrix(session_dir, username)
+        if pd_data:
+            print(f"[true_ending] 已從 AnswerMatrix 產生 PD 報告，共 {len(pd_data)} 題")
+
     que_data = load_que_log(que_log_path)
     weak     = find_weak_questions(pd_data, que_data)
 
