@@ -1033,7 +1033,9 @@ def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
 # ──────────────────────────────────────────
 
 QA_SYSTEM_PROMPT = """\
-請依據以下註釋與學生的認知數值，預測這個學生回答以下題目的答案，依據「?,?,?......」的格式生成答案。
+請依據以下註釋與學生的認知數值，預測這個學生回答以下題目的答案。
+
+重要：本次考卷的題目數量由使用者提供的實際題數決定，不一定是 8 題。
 
 accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 8 題 → 0.75。
 avg_confidence = 所有題目的信心分數（1-5）加總 ÷ 題數。反映用戶對自己答案的整體把握程度。
@@ -1048,7 +1050,11 @@ X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不�
 V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
 
-只輸出答案，答案數量應與提供的題目數相同，格式為「X,X,X,...」。不要包含其他文字。\
+【重要輸出要求】
+- 只輸出答案，不輸出任何其他文字
+- 答案必須用逗號分隔：A,B,C,D 或其他組合
+- 答案數量必須完全符合提供的題目數量
+- 每個答案必須是單一大寫字母（A、B、C 或 D）\
 """
 
 MAX_STUDENTS_R2 = 30
@@ -1186,6 +1192,7 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
 
     target_rows = rows[:MAX_STUDENTS_R2]
     all_answers = []
+    expected_count = len(questions)
 
     for idx, row in enumerate(target_rows):
         user_prompt = _qa_row_to_prompt(row, questions, revised_que_data)
@@ -1204,11 +1211,11 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
             continue
 
         parts = [p.strip().upper() for p in reply.split(',')]
-        if len(parts) == 8 and all(p in 'ABCD' for p in parts):
+        if len(parts) == expected_count and all(p in 'ABCD' for p in parts):
             all_answers.append(parts)
             print(f'[_qa_run_twins] 第 {idx+1} 筆：{parts}')
         else:
-            print(f'[_qa_run_twins] 第 {idx+1} 筆格式異常，跳過：{reply}')
+            print(f'[_qa_run_twins] 第 {idx+1} 筆格式異常（預期 {expected_count} 題，收到 {len(parts)} 個），跳過：{reply}')
 
     return all_answers, questions
 
@@ -1278,7 +1285,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
 
     students = [
         {'id': i + 1, 'answers': row,
-         'score': sum(1 for qi, a in enumerate(row) if qi < 8 and a == correct_answers[qi])}
+         'score': sum(1 for qi, a in enumerate(row) if qi < question_count and a == correct_answers[qi])}
         for i, row in enumerate(all_answers)
     ]
     push_data = json.dumps({

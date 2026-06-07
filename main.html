@@ -1058,10 +1058,12 @@
       content = `<div class="btn-row" data-group="${groupId}">${btns}</div>`;
     } else if (isButton) {
       const [lbl, col, sz, bid] = text.replace('__BUTTON__','').split('||');
-      content = `<button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
-        onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}')">
-        ${escHtml(lbl||'')}
-      </button>`;
+      content = `<div class="btn-row">
+        <button class="btn-bubble ${col||'gold'} ${sz||'medium'}"
+          onclick="clickBtn(this,'${(lbl||'').replace(/'/g,"\\'")}','${(bid||lbl||'').replace(/'/g,"\\'")}')">
+          ${escHtml(lbl||'')}
+        </button>
+      </div>`;
     } else {
       content = `<div class="bubble">${renderText(text)}</div>`;
     }
