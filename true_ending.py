@@ -710,6 +710,7 @@ def main():
     # ── 新增：無弱題時提前結束 ──
     if not remaining_weak:
         send('恭喜！所有題目的鑑別度均已達標（D ≥ 0.25），不需要進行修改。', delay=0.5)
+        print(pd_data)
         return
 
     send('接下來，我們要開始修改鑑別度未達標的題目。\n你可以從列表中選擇你想先改的題目：', delay=0.5)
