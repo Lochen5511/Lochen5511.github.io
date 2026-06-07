@@ -994,21 +994,25 @@ def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
                 key_str = str(key)
                 return key_str if key_str.startswith('Q') else f'Q{key_str}'
 
-            sorted_keys = sorted(original_que_data.keys(),
-                                 key=lambda x: int(str(x).lstrip('Q')))
+            normalized_revised = {
+                normalize_key(k): v
+                for k, v in all_revised.items()
+            }
+            revised_keys = sorted(normalized_revised.keys(),
+                                  key=lambda x: int(str(x).lstrip('Q')))
 
-            for key in sorted_keys:
-                q_key = normalize_key(key)
-                q     = dict(original_que_data[key])   # 複製原始資料
+            for q_key in revised_keys:
+                orig_q = original_que_data.get(q_key) or original_que_data.get(int(q_key.lstrip('Q')))
+                if not orig_q:
+                    continue
 
-                # 若此題有修改，覆蓋對應欄位
-                if q_key in all_revised:
-                    rev = all_revised[q_key]
-                    q['題幹']      = rev.get('revised_stem',    q.get('題幹',      ''))
-                    q['正確答案A'] = rev.get('revised_correct', q.get('正確答案A', ''))
-                    q['錯誤選項B'] = rev.get('revised_opt_b',   q.get('錯誤選項B', ''))
-                    q['錯誤選項C'] = rev.get('revised_opt_c',   q.get('錯誤選項C', ''))
-                    q['錯誤選項D'] = rev.get('revised_opt_d',   q.get('錯誤選項D', ''))
+                q = dict(orig_q)
+                rev = normalized_revised[q_key]
+                q['題幹']      = rev.get('revised_stem',    q.get('題幹',      ''))
+                q['正確答案A'] = rev.get('revised_correct', q.get('正確答案A', ''))
+                q['錯誤選項B'] = rev.get('revised_opt_b',   q.get('錯誤選項B', ''))
+                q['錯誤選項C'] = rev.get('revised_opt_c',   q.get('錯誤選項C', ''))
+                q['錯誤選項D'] = rev.get('revised_opt_d',   q.get('錯誤選項D', ''))
 
                 f.write(f'[{now_str}] [{q_key}_START]\n')
                 for field, value in q.items():
@@ -1029,7 +1033,7 @@ def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
 # ──────────────────────────────────────────
 
 QA_SYSTEM_PROMPT = """\
-請依據以下註釋與學生的認知數值，預測這個學生回答以下八題的答案，依據「?,?,?,?,?,?,?,?」的格式生成答案。
+請依據以下註釋與學生的認知數值，預測這個學生回答以下題目的答案，依據「?,?,?......」的格式生成答案。
 
 accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 8 題 → 0.75。
 avg_confidence = 所有題目的信心分數（1-5）加總 ÷ 題數。反映用戶對自己答案的整體把握程度。
@@ -1044,7 +1048,7 @@ X1 = X_REL_VALID_RELATION_ERROR（信度—效度關係推論錯：必要但不�
 V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
 
-只輸出答案，格式嚴格為「X,X,X,X,X,X,X,X」（8 個大寫字母，以逗號分隔），不要任何其他文字。\
+只輸出答案，答案數量應與提供的題目數相同，格式為「X,X,X,...」。不要包含其他文字。\
 """
 
 MAX_STUDENTS_R2 = 30
