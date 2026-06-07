@@ -873,9 +873,11 @@
     const isDropdown = text.startsWith('__DROPDOWN__');
     const isCheckbox = text.startsWith('__CHECKBOX__');
     const isData     = text.startsWith('__DATA__');
-    const isHtml     = text.startsWith('__HTML__');   // ← 新增
+    const isHtml     = text.startsWith('__HTML__');
+    const isPanel    = text.startsWith('__PANEL__');
     let content = '';
 
+    if (isPanel) return;  // 純 UI 指令，不渲染訊息
     if (isCheckbox) {
       const raw    = text.replace('__CHECKBOX__', '');
       const parts  = raw.split('||');
@@ -1112,6 +1114,13 @@
           logMsg('ai', `[ALERT] ${alertText}`);
         } else if (data.message.startsWith('__DATA__')) {
           appendMsg(data.message, 'ai');
+        } else if (data.message.startsWith('__PANEL__')) {
+          const target = data.message.replace('__PANEL__', '').trim();
+          if (target === 'stats' && !panelOpen) togglePanel();
+          else if (target === 'students' && !studentsPanelOpen) toggleStudentsPanel();
+          else if (target === 'stats_close' && panelOpen) togglePanel();
+          else if (target === 'students_close' && studentsPanelOpen) toggleStudentsPanel();
+          // 不 appendMsg，不 logMsg，純 UI 指令
         } else if (data.message.startsWith('__HTML__')) {
           appendMsg(data.message, 'ai');
           logMsg('ai', '[HTML TABLE]');

@@ -86,6 +86,20 @@ def send(text: str, delay: float = 0):
 # ──────────────────────────────────────────
 # send_alert：彈出視窗
 # ──────────────────────────────────────────
+
+# ──────────────────────────────────────────
+# send_panel：控制側邊欄開關
+# ──────────────────────────────────────────
+def send_panel(target: str):
+    """target: 'stats' | 'students' | 'stats_close' | 'students_close'"""
+    _post('/push', {
+        'text':       f'__PANEL__{target}',
+        'username':   username,
+        'session_id': session_id,
+        'log_path':   '',
+    })
+    print(f'[panel] {target}')
+
 def send_alert(message: str):
     _post('/push', {
         'text':       f'__ALERT__{message}',
@@ -603,6 +617,8 @@ def main():
     weak     = find_weak_questions(pd_data, que_data)
 
     send(f'歡迎回來，{username}！我是艾評。', delay=1)
+    send_panel('stats')
+    send_panel('students')
     send('上次課程中，我們已經完成了鑑別度的計算。', delay=0.5)
     send('今天，我們就要一起對鑑別度較低的題目進行修改。', delay=0.5)
     send('先來回顧一下上次的紀錄吧！', delay=0.5)
@@ -659,6 +675,17 @@ def main():
 
         # 從清單移除
         remaining_weak = [q for q in remaining_weak if q['q_key'] != selected_key]
+
+        # ── 發送題目預覽 ──
+        q_preview = (
+            f'讓我們來看看這一題：\n\n'
+            f'【題幹】\n{selected_q.get("stem", "（無題幹）")}\n\n'
+            f'A. {selected_q.get("correct", "")}\n'
+            f'B. {selected_q.get("opt_b",   "")}\n'
+            f'C. {selected_q.get("opt_c",   "")}\n'
+            f'D. {selected_q.get("opt_d",   "")}'
+        )
+        send(q_preview, delay=0.5)
 
         # ── 發送問題診斷選單 ──
         send(f'那麼首先，你覺得第 {selected_key} 題要先改哪裡？', delay=0.5)
