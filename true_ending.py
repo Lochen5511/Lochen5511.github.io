@@ -18,11 +18,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--username',   default='未知')
 parser.add_argument('--session_id', default='')
 parser.add_argument('--log_path',   default='')
+parser.add_argument('--round',      type=int, default=1)
 args = parser.parse_args()
 
-username   = args.username
-session_id = args.session_id
-log_path   = args.log_path
+username     = args.username
+session_id   = args.session_id
+log_path     = args.log_path
+current_round = args.round
 BACKEND = 'http://localhost:5000'
 
 from pathlib import Path
@@ -774,7 +776,7 @@ def main():
     que_data = load_que_log(que_log_path)
     weak     = find_weak_questions(pd_data, que_data)
 
-    # 若 PD 報告或題庫存在，主動推送為 __DATA__ 結構，避免時序 race
+    # ── 推送 PD／題庫資料 ──
     try:
         if pd_data:
             _post('/push', {
@@ -783,7 +785,6 @@ def main():
                 'session_id': session_id,
                 'log_path': ''
             })
-            print(f"[true_ending] 已推送 PD 報告，共 {len(pd_data)} 題")
         if que_data:
             _post('/push', {
                 'text':     f"__DATA__{json.dumps({'type':'que_log','questions':que_data}, ensure_ascii=False)}",
@@ -791,45 +792,58 @@ def main():
                 'session_id': session_id,
                 'log_path': ''
             })
-            print(f"[true_ending] 已推送 題庫報告，共 {len(que_data)} 題")
     except Exception as e:
-        print(f"[true_ending] 推送 PD/題庫為 __DATA__ 時發生錯誤：{e}")
+        print(f"[true_ending] 推送 PD/題庫失敗：{e}")
 
-    send(f'歡迎回來，{username}！我是艾評。', delay=1)
-    # ── 重新推送第一輪 AnswerMatrix 資料到側邊欄 ──
-    _push_existing_answer_matrix()
-    send_panel('stats')
-    send_panel('students')
-    send('上次課程中，我們已經完成了鑑別度的計算。', delay=0.5)
-    send('今天，我們就要一起對鑑別度較低的題目進行修改。', delay=0.5)
-    send('先來回顧一下上次的紀錄吧！', delay=0.5)
+    # ══════════════════════════════════════════
+    # round == 1：完整開場（第一次進入）
+    # round >= 2：跳過歡迎語與 PD 總覽，直接進修題
+    # ══════════════════════════════════════════
+    if current_round == 1:
+        send(f'歡迎回來，{username}！我是艾評。', delay=1)
+        _push_existing_answer_matrix()
+        send_panel('stats')
+        send_panel('students')
+        send('上次課程中，我們已經完成了鑑別度的計算。', delay=0.5)
+        send('今天，我們就要一起對鑑別度較低的題目進行修改。', delay=0.5)
+        send('先來回顧一下上次的紀錄吧！', delay=0.5)
 
-    def d_label(d):
-        if d >= 0.4:    return '優異'
-        elif d >= 0.25: return '正常'
-        else:           return '待加強'
+        def d_label(d):
+            if d >= 0.4:    return '優異'
+            elif d >= 0.25: return '正常'
+            else:           return '待加強'
 
-    table_lines = ['各題難度與鑑別度總覽：\n']
-    table_lines.append('題目｜難度 P｜鑑別度 D｜評價')
-    table_lines.append('─' * 32)
+        table_lines = ['各題難度與鑑別度總覽：\n']
+        table_lines.append('題目｜難度 P｜鑑別度 D｜評價')
+        table_lines.append('─' * 32)
+        for q_key, val in pd_data.items():
+            label = d_label(val['d'])
+            table_lines.append(f"{q_key}｜{val['p']}｜{val['d']}｜{label}")
+        send('\n'.join(table_lines), delay=0.5)
 
-    for q_key, val in pd_data.items():
-        label = d_label(val['d'])
-        table_lines.append(f"{q_key}｜{val['p']}｜{val['d']}｜{label}")
+        if not weak:
+            send('恭喜！所有題目的鑑別度均已達標（D ≥ 0.25），不需要進行修改。', delay=0.5)
+            print(pd_data)
+            return
 
-    send('\n'.join(table_lines), delay=0.5)
+        send('接下來，我們要開始修改鑑別度未達標的題目。\n你可以從列表中選擇你想先改的題目：', delay=0.5)
+
+    else:
+        # round >= 2：重新從最新 AnswerMatrix 計算 PD，重建 weak 清單
+        pd_data = _compute_pd_from_answer_matrix(session_dir, username) or pd_data
+        weak    = find_weak_questions(pd_data, que_data)
+
+        send(f'好，我們繼續！', delay=0.5)
+
+        if not weak:
+            send('所有題目的鑑別度都已達標（D ≥ 0.25），不需要再修改了。', delay=0.5)
+            send('整個流程到此圓滿完成，謝謝你的參與！', delay=0.5)
+            return
+
+        send(f'以下 {len(weak)} 題仍需修改，請從列表中選擇：', delay=0.5)
 
     remaining_weak = weak.copy()
-
-    # ── 新增：無弱題時提前結束 ──
-    if not remaining_weak:
-        send('恭喜！所有題目的鑑別度均已達標（D ≥ 0.25），不需要進行修改。', delay=0.5)
-        print(pd_data)
-        return
-
-    send('接下來，我們要開始修改鑑別度未達標的題目。\n你可以從列表中選擇你想先改的題目：', delay=0.5)
-
-    all_revised = {}
+    all_revised    = {}
 
     while remaining_weak:
         weak_options = [f"{q['q_key']}｜{q.get('concept', '未知概念')}｜D={q['d']}" for q in remaining_weak]
