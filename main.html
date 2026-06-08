@@ -1029,7 +1029,7 @@
     } else if (isDropdown) {
       const raw         = text.replace('__DROPDOWN__', '');
       const parts       = raw.split('||');
-      const ddId        = parts[0] || 'dropdown';
+      const ddId  = (parts[0] || 'dropdown') + '_' + Date.now();
       const placeholder = parts[1] || '請選擇…';
       const options     = parts.slice(2);
       const opts        = options.map(o =>
