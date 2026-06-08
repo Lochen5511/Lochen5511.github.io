@@ -16,12 +16,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--username',   default='未知')
 parser.add_argument('--session_id', default='')
 parser.add_argument('--log_path',   default='')
+parser.add_argument('--que_log',    default='')
 args = parser.parse_args()
 
-username   = args.username
-session_id = args.session_id
-log_path   = args.log_path
-BACKEND    = 'http://localhost:5000'
+username        = args.username
+session_id      = args.session_id
+log_path        = args.log_path
+revised_que_log = args.que_log
+BACKEND         = 'http://localhost:5000'
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -483,6 +485,7 @@ def main():
         '--session_id', session_id,
         '--log_path',   log_path,
         '--round',      '2',
+        '--que_log',    revised_que_log,
     ]
     try:
         subprocess.Popen(

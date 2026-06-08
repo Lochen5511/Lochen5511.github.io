@@ -18,13 +18,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--username',   default='未知')
 parser.add_argument('--session_id', default='')
 parser.add_argument('--log_path',   default='')
+parser.add_argument('--que_log',    default='')
 parser.add_argument('--round',      type=int, default=1)
 args = parser.parse_args()
 
-username     = args.username
-session_id   = args.session_id
-log_path     = args.log_path
-current_round = args.round
+username        = args.username
+session_id      = args.session_id
+log_path        = args.log_path
+revised_que_log_arg = args.que_log
+current_round   = args.round
 BACKEND = 'http://localhost:5000'
 
 from pathlib import Path
@@ -42,7 +44,10 @@ old_folder_name = os.path.basename(session_dir)
 old_session_id  = old_folder_name.replace(f"{username}_", "", 1)
 
 pd_txt_path  = log_path
-que_log_path = os.path.join(session_dir, f"{old_session_id}_que_set_log.txt")
+if revised_que_log_arg and os.path.exists(revised_que_log_arg):
+    que_log_path = revised_que_log_arg
+else:
+    que_log_path = os.path.join(session_dir, f"{old_session_id}_que_set_log.txt")
 
 print(f"[true_ending] PD 報告路徑：{pd_txt_path}")
 print(f"[true_ending] 題庫路徑：  {que_log_path}")
@@ -1328,6 +1333,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         '--username',   username,
         '--session_id', session_id,
         '--log_path',   log_path,
+        '--que_log',    revised_que_log,
     ]
     try:
         subprocess.Popen(
