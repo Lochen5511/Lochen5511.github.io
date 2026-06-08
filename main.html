@@ -1007,12 +1007,10 @@
           // PD 報告顯示摘要
           console.log('[pd_report]', payload);
           const n = Object.keys(payload.items || {}).length;
-          appendMsg(`已接收 PD 報告：${n} 題`, 'ai');
         } else if (payload.type === 'que_log') {
           // 題庫報告顯示摘要
           console.log('[que_log]', payload);
           const n = Object.keys(payload.questions || {}).length;
-          appendMsg(`已接收 題庫報告：${n} 題`, 'ai');
         } else if (payload.type === 'answer_matrix_combined') {
           renderChartsCombined(
             payload.round1.stats, payload.round1.n_students,
