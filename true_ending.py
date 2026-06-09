@@ -671,18 +671,21 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
 
     scores = [sum(1 for ans in row if ans == '1') for row in answers]
     sorted_idx = sorted(range(n), key=lambda i: scores[i])
-    group_size = max(1, round(n * 0.27))
-    low_idx = sorted_idx[:group_size]
-    high_idx = sorted_idx[-group_size:]
+    # 使用固定 10 人分組以符合鑑別度定義；若總人數少於 10，則以實際人數為分母
+    group_for_pd = min(10, n)
+    low_idx = sorted_idx[:group_for_pd]
+    high_idx = sorted_idx[-group_for_pd:]
 
     result = {}
     for q_idx in range(8):
         q_key = f'Q{q_idx + 1}'
         correct_count = sum(1 for row in answers if len(row) > q_idx and row[q_idx] == '1')
-        p = round(correct_count / n, 3)
+        # 難度 p 以 30 為分母（參考來源），若需以實際人數計算請告知
+        p = round(correct_count / 30, 3)
         high_correct = sum(1 for i in high_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
         low_correct = sum(1 for i in low_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
-        d = round(high_correct / group_size - low_correct / group_size, 3)
+        denom = 10 if n >= 10 else group_for_pd
+        d = round(high_correct / denom - low_correct / denom, 3)
         result[q_key] = {'p': p, 'd': d, 'label': ''}
 
     print(f"[true_ending] 從 AnswerMatrix 計算 PD：{len(result)} 題")

@@ -233,22 +233,24 @@ def compute_pd_from_matrix(matrix_path: str) -> dict:
         print(f"[compute_pd] 無有效資料（n={n}, q={len(question_cols)}）")
         return {}
 
-    # 依總分排序，取高低各 27%（最少 1 人）
+    # 依總分排序，固定取高低各最多 10 人（若總人數 < 10，則以實際人數退而使用）
     scores     = [sum(row) for row in answers]
     sorted_idx = sorted(range(n), key=lambda i: scores[i])
-    group_size = max(1, round(n * 0.27))
-    low_idx    = sorted_idx[:group_size]
-    high_idx   = sorted_idx[-group_size:]
+    group_for_pd = min(10, n)
+    low_idx    = sorted_idx[:group_for_pd]
+    high_idx   = sorted_idx[-group_for_pd:]
 
     result = {}
     for col_pos in range(len(question_cols)):
         q_key         = f'Q{col_pos + 1}'
         correct_count = sum(row[col_pos] for row in answers)
-        p             = round(correct_count / n, 3)
+        # 難度 p 使用固定分母 30（與 true_ending.py 保持一致）
+        p             = round(correct_count / 30, 3)
 
         high_correct = sum(answers[i][col_pos] for i in high_idx)
         low_correct  = sum(answers[i][col_pos] for i in low_idx)
-        d            = round(high_correct / group_size - low_correct / group_size, 3)
+        denom = 10 if n >= 10 else group_for_pd
+        d            = round(high_correct / denom - low_correct / denom, 3)
 
         result[q_key] = {'p': p, 'd': d}
 
