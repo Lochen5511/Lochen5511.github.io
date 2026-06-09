@@ -469,7 +469,7 @@ def main():
             '你的題目修改非常成功，孿生班級的作答結果確認了這一點！',
             delay=0.5,
         )
-        send('整個課程流程到此圓滿完成，謝謝你的參與！', delay=0.5)
+        send(f'課程流程到此完成，{username}，謝謝你的參與！', delay=0.5)
         _write_log('[te_pd] 所有題目鑑別度達標，流程結束')
         return
 
@@ -481,6 +481,7 @@ def main():
             delay=0.5,
         )
         _write_log('[te_pd] 已達執行上限（2次），強制結束')
+        send(f'課程流程到此完成，{username}，謝謝你的參與！', delay=0.5)
         return
 
     # ── 仍有弱題：不提供結束選項，必須繼續修改 ──
