@@ -21,7 +21,7 @@ from datetime import datetime
 # 接收變數
 # ──────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument('--username',   default='劉羽真')
+parser.add_argument('--username',   default='Tempus_Aeternum')
 parser.add_argument('--session_id', default='')
 parser.add_argument('--log_path',   default='')
 args = parser.parse_args()

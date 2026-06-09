@@ -826,6 +826,17 @@ def main():
             table_lines.append(f"{q_key}｜{val['p']}｜{val['d']}｜{label}")
         send('\n'.join(table_lines), delay=0.5)
 
+        r1_pd_path = os.path.join(session_dir, f"{old_session_id}_r1_pd_report.txt")
+        try:
+            with open(r1_pd_path, 'w', encoding='utf-8') as f:
+                f.write('題目｜難度 P｜鑑別度 D｜評價\n')
+                f.write('─' * 32 + '\n')
+                for q_key, val in pd_data.items():
+                    label = d_label(val['d'])
+                    f.write(f"{q_key}｜{val['p']}｜{val['d']}｜{label}\n")
+        except Exception as e:
+            print(f"[true_ending] r1 PD 寫出失敗：{e}")
+
         if not weak:
             send('恭喜！所有題目的鑑別度均已達標（D ≥ 0.25），不需要進行修改。', delay=0.5)
             print(pd_data)

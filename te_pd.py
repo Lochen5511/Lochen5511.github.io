@@ -32,9 +32,10 @@ print(f"[te_pd.py] 啟動  user={username}  session={session_id}")
 # ──────────────────────────────────────────
 # 路徑設定
 # ──────────────────────────────────────────
-session_dir     = os.path.dirname(log_path)
-old_folder_name = os.path.basename(session_dir)
-old_session_id  = old_folder_name.replace(f"{username}_", "", 1)
+session_dir        = os.path.dirname(log_path)
+old_folder_name    = os.path.basename(session_dir)
+old_session_id     = old_folder_name.replace(f"{username}_", "", 1)
+te_pd_count_path   = os.path.join(session_dir, f"{old_session_id}_te_pd_count.txt")
 
 print(f"[te_pd] session_dir：{session_dir}")
 
@@ -260,19 +261,19 @@ def compute_pd_from_matrix(matrix_path: str) -> dict:
 # ──────────────────────────────────────────
 def load_r1_pd() -> dict:
     """
-    嘗試從 session_dir 找到第一輪 PD txt（*_pd_report.txt 或 log_path 本身）。
+    嘗試從 session_dir 找到第一輪 PD txt，優先固定命名的 r1 檔案。
     格式：q_key｜p｜d｜label，與 true_ending.py 的 load_pd_report 相同。
     """
-    candidates = []
-    try:
-        for fn in os.listdir(session_dir):
-            if fn.endswith('_pd_report.txt') or fn.endswith('_pd.txt'):
-                candidates.append(os.path.join(session_dir, fn))
-    except Exception as e:
-        print(f"[load_r1_pd] 掃描失敗：{e}")
+    r1_path    = os.path.join(session_dir, f"{old_session_id}_r1_pd_report.txt")
+    candidates = [r1_path] if os.path.exists(r1_path) else []
 
-    if log_path and os.path.exists(log_path):
-        candidates.append(log_path)
+    if not candidates:
+        try:
+            for fn in os.listdir(session_dir):
+                if fn.endswith('_pd_report.txt') or fn.endswith('_pd.txt'):
+                    candidates.append(os.path.join(session_dir, fn))
+        except Exception as e:
+            print(f"[load_r1_pd] 掃描失敗：{e}")
 
     for path in candidates:
         result = {}
@@ -362,6 +363,23 @@ def d_label(d: float) -> str:
 # ──────────────────────────────────────────
 def main():
     _write_log('[te_pd] 啟動')
+
+    # 讀取目前執行次數
+    try:
+        with open(te_pd_count_path, 'r', encoding='utf-8') as f:
+            te_pd_run_count = int(f.read().strip())
+    except Exception:
+        te_pd_run_count = 0
+
+    te_pd_run_count += 1
+    try:
+        with open(te_pd_count_path, 'w', encoding='utf-8') as f:
+            f.write(str(te_pd_run_count))
+    except Exception as e:
+        print(f"[te_pd] 計數寫入失敗：{e}")
+
+    print(f"[te_pd] 第 {te_pd_run_count} 次執行")
+
     send('孿生班級已完成作答，正在計算新的難度與鑑別度……', delay=1)
     _thinking(True)
 
@@ -453,6 +471,16 @@ def main():
         )
         send('整個課程流程到此圓滿完成，謝謝你的參與！', delay=0.5)
         _write_log('[te_pd] 所有題目鑑別度達標，流程結束')
+        return
+
+    # ── 達到上限：強制進入結束階段 ──
+    if te_pd_run_count >= 2:
+        send(
+            f'目前仍有 {len(still_weak)} 題鑑別度未達標：{ "、".join(still_weak) }\n'
+            f'已完成兩輪修改，進入最終總結階段。',
+            delay=0.5,
+        )
+        _write_log('[te_pd] 已達執行上限（2次），強制結束')
         return
 
     # ── 仍有弱題：不提供結束選項，必須繼續修改 ──
