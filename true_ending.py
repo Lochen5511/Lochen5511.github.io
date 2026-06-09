@@ -857,6 +857,7 @@ def main():
         if not weak:
             send('恭喜！所有題目的鑑別度均已達標（D ≥ 0.25），不需要進行修改。', delay=0.5)
             print(pd_data)
+            send(f'課程流程到此完成，{username}，謝謝你的參與！', delay=0.5)
             return
 
         send('接下來，我們要開始修改鑑別度未達標的題目。\n你可以從列表中選擇你想先改的題目：', delay=0.5)
