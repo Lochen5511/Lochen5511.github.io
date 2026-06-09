@@ -322,12 +322,11 @@ def load_r1_pd() -> dict:
 # ──────────────────────────────────────────
 # 推送統計資料到前端側邊欄
 # ──────────────────────────────────────────
-def push_stats(all_answers_raw: list, question_count: int):
+def push_stats(all_answers_raw: list, question_keys: list[str]):
     """將作答矩陣（0/1 格式）推送為 __DATA__ 結構供側邊欄顯示。"""
-    correct_answers = ['A'] * question_count
+    correct_answers = ['A'] * len(question_keys)
     stats = {}
-    for q_idx in range(question_count):
-        key    = f'Q{q_idx + 1}'
+    for q_idx, key in enumerate(question_keys):
         counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
         for row in all_answers_raw:
             if q_idx < len(row):
@@ -337,8 +336,8 @@ def push_stats(all_answers_raw: list, question_count: int):
     students = [
         {
             'id':      i + 1,
-            'answers': ['A' if v == 1 else 'B' for v in row[:question_count]],
-            'score':   sum(row[:question_count]),
+            'answers': ['A' if v == 1 else 'B' for v in row[:len(question_keys)]],
+            'score':   sum(row[:len(question_keys)]),
         }
         for i, row in enumerate(all_answers_raw)
     ]
@@ -426,7 +425,8 @@ def main():
             except (ValueError, IndexError):
                 pass
         if raw_answers:
-            push_stats(raw_answers, len(question_cols))
+            question_keys = [header[i] for i in question_cols]
+            push_stats(raw_answers, question_keys)
     except Exception as e:
         print(f"[te_pd] 推送側邊欄統計失敗：{e}")
 

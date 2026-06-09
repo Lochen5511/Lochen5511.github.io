@@ -649,7 +649,6 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
     """直接複製自 va_pd.py 的 calc_pd 邏輯。"""
     CORRECT_ANS = '1'
     N_GROUP = 10
-    N_QUESTIONS = 8
     
     matrix_path = os.path.join(session_dir, f"{user_name}_AnswerMatrix.csv")
     if not os.path.exists(matrix_path):
@@ -657,14 +656,18 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
         return {}
 
     answers = []
+    question_keys = []
     try:
         with open(matrix_path, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
             rows = list(reader)
+        if rows:
+            header = rows[0]
+            question_keys = [h for h in header if re.match(r'^Q\d+$', h)]
         for row in rows[1:]:
             if not row:
                 continue
-            answers.append(row[:8])
+            answers.append(row[:len(question_keys)])
     except Exception as e:
         print(f"[true_ending] 讀取 AnswerMatrix 失敗：{e}")
         return {}
@@ -684,14 +687,12 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
     high_indices = [i for i, _ in indexed[-N_GROUP:]]
 
     result = {}
-    for q_idx in range(N_QUESTIONS):
-        q_key = f'Q{q_idx + 1}'
-
-        correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
+    for q_idx, q_key in enumerate(question_keys):
+        correct_count = sum(1 for row in answers if q_idx < len(row) and row[q_idx] == CORRECT_ANS)
         p = round(correct_count / n, 3)
 
-        high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
-        low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
+        high_correct = sum(1 for i in high_indices if q_idx < len(answers[i]) and answers[i][q_idx] == CORRECT_ANS)
+        low_correct  = sum(1 for i in low_indices  if q_idx < len(answers[i]) and answers[i][q_idx] == CORRECT_ANS)
         d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
 
         result[q_key] = {
@@ -1190,6 +1191,7 @@ def _qa_build_questions(que_data: dict) -> list:
         q = que_data[n]
         if all(k in q for k in ('題幹', '正確答案A', '錯誤選項B', '錯誤選項C', '錯誤選項D')):
             questions.append({
+                'q_key': f'Q{n}' if isinstance(n, int) or str(n).isdigit() else str(n),
                 'stem': q['題幹'],
                 'options': {
                     'A': q['正確答案A'],
@@ -1201,12 +1203,12 @@ def _qa_build_questions(que_data: dict) -> list:
     return questions
 
 
-def _qa_save_answer_matrix(answers: list, round_tag: str = 'r2') -> str:
+def _qa_save_answer_matrix(answers: list, question_keys: list[str], round_tag: str = 'r2') -> str:
     """儲存作答矩陣，回傳路徑"""
     ts             = datetime.now().strftime('%Y%m%d_%H%M%S')
     out_path       = os.path.join(session_dir, f"{username}_AnswerMatrix_{round_tag}_{ts}.csv")
-    question_count = len(answers[0]) if answers else 8
-    header         = [f'Q{i+1}' for i in range(question_count)] + ['Total']
+    question_count = len(question_keys)
+    header         = question_keys + ['Total']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -1310,7 +1312,8 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         return
 
     # ── 儲存作答矩陣 ──
-    matrix_path = _qa_save_answer_matrix(all_answers)
+    question_keys = [q['q_key'] for q in questions]
+    matrix_path = _qa_save_answer_matrix(all_answers, question_keys)
     if not matrix_path:
         send('⚠️ 作答矩陣儲存失敗，請通知系統管理員。', delay=0.3)
         return
