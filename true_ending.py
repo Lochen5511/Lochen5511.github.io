@@ -646,6 +646,11 @@ def _extract_pd_from_log(logfile: str) -> dict:
 
 
 def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
+    """直接複製自 va_pd.py 的 calc_pd 邏輯。"""
+    CORRECT_ANS = '1'
+    N_GROUP = 10
+    N_QUESTIONS = 8
+    
     matrix_path = os.path.join(session_dir, f"{user_name}_AnswerMatrix.csv")
     if not os.path.exists(matrix_path):
         print(f"[true_ending] AnswerMatrix 不存在：{matrix_path}")
@@ -669,24 +674,31 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
         print(f"[true_ending] AnswerMatrix 無作答資料")
         return {}
 
-    scores = [sum(1 for ans in row if ans == '1') for row in answers]
-    sorted_idx = sorted(range(n), key=lambda i: scores[i])
-    # 使用固定 10 人分組以符合鑑別度定義；若總人數少於 10，則以實際人數為分母
-    group_for_pd = min(10, n)
-    low_idx = sorted_idx[:group_for_pd]
-    high_idx = sorted_idx[-group_for_pd:]
+    scores = []
+    for row in answers:
+        score = sum(1 for ans in row if ans == CORRECT_ANS)
+        scores.append(score)
+
+    indexed      = sorted(enumerate(scores), key=lambda x: x[1])
+    low_indices  = [i for i, _ in indexed[:N_GROUP]]
+    high_indices = [i for i, _ in indexed[-N_GROUP:]]
 
     result = {}
-    for q_idx in range(8):
+    for q_idx in range(N_QUESTIONS):
         q_key = f'Q{q_idx + 1}'
-        correct_count = sum(1 for row in answers if len(row) > q_idx and row[q_idx] == '1')
-        # 難度 p 以 30 為分母（參考來源），若需以實際人數計算請告知
-        p = round(correct_count / 30, 3)
-        high_correct = sum(1 for i in high_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
-        low_correct = sum(1 for i in low_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
-        denom = 10 if n >= 10 else group_for_pd
-        d = round(high_correct / denom - low_correct / denom, 3)
-        result[q_key] = {'p': p, 'd': d, 'label': ''}
+
+        correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
+        p = round(correct_count / n, 3)
+
+        high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
+        low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
+        d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
+
+        result[q_key] = {
+            'p':       p,
+            'd':       d,
+            'label':   '',
+        }
 
     print(f"[true_ending] 從 AnswerMatrix 計算 PD：{len(result)} 題")
     return result

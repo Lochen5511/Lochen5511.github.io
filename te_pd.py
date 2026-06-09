@@ -198,8 +198,13 @@ def find_latest_matrix(round_tag: str = 'r2') -> str:
 def compute_pd_from_matrix(matrix_path: str) -> dict:
     """
     讀取 AnswerMatrix CSV（0/1 格式），計算每題的 P 值與 D 值。
+    直接複製自 va_pd.py 的 calc_pd 邏輯。
     回傳 {q_key: {'p': float, 'd': float}} dict。
     """
+    CORRECT_ANS = 1  # 整數 1 for binary answers
+    N_GROUP = 10
+    N_QUESTIONS = 8
+    
     if not os.path.exists(matrix_path):
         print(f"[compute_pd] 檔案不存在：{matrix_path}")
         return {}
@@ -233,28 +238,32 @@ def compute_pd_from_matrix(matrix_path: str) -> dict:
         print(f"[compute_pd] 無有效資料（n={n}, q={len(question_cols)}）")
         return {}
 
-    # 依總分排序，固定取高低各最多 10 人（若總人數 < 10，則以實際人數退而使用）
-    scores     = [sum(row) for row in answers]
-    sorted_idx = sorted(range(n), key=lambda i: scores[i])
-    group_for_pd = min(10, n)
-    low_idx    = sorted_idx[:group_for_pd]
-    high_idx   = sorted_idx[-group_for_pd:]
+    scores = []
+    for row in answers:
+        score = sum(1 for ans in row if ans == CORRECT_ANS)
+        scores.append(score)
+
+    indexed      = sorted(enumerate(scores), key=lambda x: x[1])
+    low_indices  = [i for i, _ in indexed[:N_GROUP]]
+    high_indices = [i for i, _ in indexed[-N_GROUP:]]
 
     result = {}
-    for col_pos in range(len(question_cols)):
-        q_key         = f'Q{col_pos + 1}'
-        correct_count = sum(row[col_pos] for row in answers)
-        # 難度 p 使用固定分母 30（與 true_ending.py 保持一致）
-        p             = round(correct_count / 30, 3)
+    for q_idx in range(N_QUESTIONS):
+        q_key = f'Q{q_idx + 1}'
 
-        high_correct = sum(answers[i][col_pos] for i in high_idx)
-        low_correct  = sum(answers[i][col_pos] for i in low_idx)
-        denom = 10 if n >= 10 else group_for_pd
-        d            = round(high_correct / denom - low_correct / denom, 3)
+        correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
+        p = round(correct_count / n, 3)
 
-        result[q_key] = {'p': p, 'd': d}
+        high_correct = sum(1 for i in high_indices if answers[i][q_idx] == CORRECT_ANS)
+        low_correct  = sum(1 for i in low_indices  if answers[i][q_idx] == CORRECT_ANS)
+        d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
 
-    print(f"[compute_pd] 計算完成：{n} 人，{len(question_cols)} 題")
+        result[q_key] = {
+            'p':       p,
+            'd':       d,
+        }
+
+    print(f"[compute_pd] 計算完成：{n} 人，{N_QUESTIONS} 題")
     return result
 
 
