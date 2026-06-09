@@ -827,7 +827,7 @@ def main():
         send_panel('students')
         send('上次課程中，我們已經完成了鑑別度的計算。', delay=0.5)
         send('今天，我們就要一起對鑑別度較低的題目進行修改。', delay=0.5)
-        send('先來回顧一下上次的紀錄吧！', delay=0.5)
+        send('先來回顧一下上次的紀錄吧！\n請注意，右側欄只反映答對與答錯，選擇A則為記錄上答對，選擇B則為答錯。', delay=0.5)
 
         def d_label(d):
             if d >= 0.4:    return '優異'

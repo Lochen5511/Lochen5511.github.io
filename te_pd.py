@@ -248,8 +248,8 @@ def compute_pd_from_matrix(matrix_path: str) -> dict:
     high_indices = [i for i, _ in indexed[-N_GROUP:]]
 
     result = {}
-    for q_idx in range(N_QUESTIONS):
-        q_key = f'Q{q_idx + 1}'
+    for q_idx in range(n_questions):
+        q_key = header[question_cols[q_idx]] if q_idx < len(question_cols) else f'Q{q_idx + 1}'
 
         correct_count = sum(1 for row in answers if row[q_idx] == CORRECT_ANS)
         p = round(correct_count / n, 3)
@@ -263,7 +263,7 @@ def compute_pd_from_matrix(matrix_path: str) -> dict:
             'd':       d,
         }
 
-    print(f"[compute_pd] 計算完成：{n} 人，{N_QUESTIONS} 題")
+    print(f"[compute_pd] 計算完成：{n} 人，{n_questions} 題")
     return result
 
 
