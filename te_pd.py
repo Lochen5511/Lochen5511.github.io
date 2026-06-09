@@ -35,9 +35,11 @@ print(f"[te_pd.py] 啟動  user={username}  session={session_id}")
 session_dir        = os.path.dirname(log_path)
 old_folder_name    = os.path.basename(session_dir)
 old_session_id     = old_folder_name.replace(f"{username}_", "", 1)
-te_pd_count_path   = os.path.join(session_dir, f"{old_session_id}_te_pd_count.txt")
+clean_session_id   = re.sub(r'[^A-Za-z0-9_-]', '_', session_id) if session_id else old_session_id
+te_pd_count_path   = os.path.join(session_dir, f"{clean_session_id}_te_pd_count.txt")
 
 print(f"[te_pd] session_dir：{session_dir}")
+print(f"[te_pd] te_pd_count_path：{te_pd_count_path}")
 
 # ──────────────────────────────────────────
 # 工具函數（與 true_ending.py 相同）
