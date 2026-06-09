@@ -671,8 +671,9 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
 
     scores = [sum(1 for ans in row if ans == '1') for row in answers]
     sorted_idx = sorted(range(n), key=lambda i: scores[i])
-    low_idx = sorted_idx[:10]
-    high_idx = sorted_idx[-10:]
+    group_size = max(1, round(n * 0.27))
+    low_idx = sorted_idx[:group_size]
+    high_idx = sorted_idx[-group_size:]
 
     result = {}
     for q_idx in range(8):
@@ -681,7 +682,7 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
         p = round(correct_count / n, 3)
         high_correct = sum(1 for i in high_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
         low_correct = sum(1 for i in low_idx if len(answers[i]) > q_idx and answers[i][q_idx] == '1')
-        d = round(high_correct / 10 - low_correct / 10, 3)
+        d = round(high_correct / group_size - low_correct / group_size, 3)
         result[q_key] = {'p': p, 'd': d, 'label': ''}
 
     print(f"[true_ending] 從 AnswerMatrix 計算 PD：{len(result)} 題")
