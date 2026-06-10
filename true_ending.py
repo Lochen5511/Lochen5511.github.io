@@ -22,12 +22,12 @@ parser.add_argument('--que_log',    default='')
 parser.add_argument('--round',      type=int, default=1)
 args = parser.parse_args()
 
-username        = args.username
-session_id      = args.session_id
-log_path        = args.log_path
+username            = args.username
+session_id          = args.session_id
+log_path            = args.log_path
 revised_que_log_arg = args.que_log
-current_round   = args.round
-BACKEND = 'http://localhost:5000'
+current_round       = args.round
+BACKEND             = 'http://localhost:5000'
 
 from pathlib import Path
 
@@ -43,7 +43,7 @@ session_dir     = os.path.dirname(log_path)
 old_folder_name = os.path.basename(session_dir)
 old_session_id  = old_folder_name.replace(f"{username}_", "", 1)
 
-pd_txt_path  = log_path
+pd_txt_path = log_path
 if revised_que_log_arg and os.path.exists(revised_que_log_arg):
     que_log_path = revised_que_log_arg
 else:
@@ -84,16 +84,11 @@ def _get(path: str, params: dict = None):
 def _thinking(state: bool):
     _post('/thinking', {'username': username, 'session_id': session_id, 'thinking': state})
 
-
-# ──────────────────────────────────────────
-# send：發送訊息
-# ──────────────────────────────────────────
 def send(text: str, delay: float = 0):
     if delay > 0:
         _thinking(True)
         time.sleep(delay)
         _thinking(False)
-
     _post('/push', {
         'text':       text,
         'username':   username,
@@ -102,14 +97,6 @@ def send(text: str, delay: float = 0):
     })
     print(f"[send] {text[:50]}")
 
-
-# ──────────────────────────────────────────
-# send_alert：彈出視窗
-# ──────────────────────────────────────────
-
-# ──────────────────────────────────────────
-# send_panel：控制側邊欄開關
-# ──────────────────────────────────────────
 def send_panel(target: str):
     """target: 'stats' | 'students' | 'stats_close' | 'students_close'"""
     _post('/push', {
@@ -129,10 +116,6 @@ def send_alert(message: str):
     })
     print(f"[alert] {message[:50]}")
 
-
-# ──────────────────────────────────────────
-# send_button：單一按鈕
-# ──────────────────────────────────────────
 def send_button(label: str, delay: float = 0,
                 color: str = 'gold', size: str = 'medium',
                 button_id: str = ''):
@@ -140,7 +123,6 @@ def send_button(label: str, delay: float = 0,
         _thinking(True)
         time.sleep(delay)
         _thinking(False)
-
     bid = button_id or label
     _post('/push', {
         'text':       f'__BUTTON__{label}||{color}||{size}||{bid}',
@@ -151,10 +133,6 @@ def send_button(label: str, delay: float = 0,
     _lock(True)
     print(f"[button] {label}  id={bid}")
 
-
-# ──────────────────────────────────────────
-# send_buttons：多個並排按鈕
-# ──────────────────────────────────────────
 def send_buttons(labels: list, delay: float = 0,
                  colors: list = None, size: str = 'medium',
                  sizes: list = None, button_ids: list = None):
@@ -162,12 +140,10 @@ def send_buttons(labels: list, delay: float = 0,
         _thinking(True)
         time.sleep(delay)
         _thinking(False)
-
     n          = len(labels)
     colors     = colors     or ['gold'] * n
     button_ids = button_ids or labels
     size_list  = sizes      or [size]  * n
-
     parts = ';'.join(
         f'{labels[i]}||{colors[i]}||{size_list[i]}||{button_ids[i]}'
         for i in range(n)
@@ -181,10 +157,6 @@ def send_buttons(labels: list, delay: float = 0,
     _lock(True)
     print(f"[buttons] {labels}")
 
-
-# ──────────────────────────────────────────
-# wait_for_user：等待用戶回應
-# ──────────────────────────────────────────
 def wait_for_user(interval: float = 0.5, timeout: int = 300, wait_limit: int = None) -> str | None:
     import time as _time
     start = _time.time()
@@ -222,7 +194,6 @@ def wait_for_user(interval: float = 0.5, timeout: int = 300, wait_limit: int = N
                 return None
 
         time.sleep(interval)
-
 
 def _write_log(content: str):
     if not log_path:
@@ -271,7 +242,6 @@ def load_answer_matrix(session_dir: str, username: str) -> list:
         print(f"[true_ending] AnswerMatrix 讀取失敗：{e}")
         return []
 
-
 def load_validity_wide_table() -> list:
     logs_dir   = os.path.dirname(session_dir)
     table_path = os.path.join(logs_dir, 'validity_wide_table.csv')
@@ -285,11 +255,9 @@ def load_validity_wide_table() -> list:
     except Exception as e:
         print(f"[true_ending] validity_wide_table 讀取失敗：{e}")
         return []
-    
+
 def _push_existing_answer_matrix():
     """讀取第一輪 AnswerMatrix.csv，重新推送 __DATA__ 讓側邊欄顯示第一輪資料。"""
-    import csv, json
-
     matrix_path = os.path.join(session_dir, f"{username}_AnswerMatrix.csv")
     if not os.path.exists(matrix_path):
         print(f"[_push_existing] AnswerMatrix 不存在：{matrix_path}")
@@ -300,11 +268,9 @@ def _push_existing_answer_matrix():
         with open(matrix_path, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
             rows   = list(reader)
-        # 第一列是 header（Q1,Q2,...,Total），跳過
         for row in rows[1:]:
             if not row:
                 continue
-            # binary 轉回 A/非A（只需判斷對錯，用 A 代表答對）
             answers = ['A' if cell == '1' else 'B' for cell in row[:8]]
             all_answers.append(answers)
     except Exception as e:
@@ -476,7 +442,6 @@ def interview_student(student: dict, q_info: dict, label: str):
 # 收集並確認單筆輸入（含重試迴圈）
 # ──────────────────────────────────────────
 def collect_confirmed_input(prompt: str) -> str | None:
-    """發送提示 → 等待輸入 → 確認按鈕；回傳確認後的文字，或 None／'__INTERRUPTED__'。"""
     while True:
         send(prompt, delay=0.3)
         _lock(False)
@@ -506,11 +471,6 @@ def collect_confirmed_input(prompt: str) -> str | None:
 # 題目修改流程
 # ──────────────────────────────────────────
 def revise_question(q_info: dict) -> dict:
-    """
-    引導用戶修改題幹／選項，回傳包含修改結果的 dict。
-    keys: revised_stem, revised_correct, revised_opt_b,
-          revised_opt_c, revised_opt_d（未修改的欄位保留原值）
-    """
     send('現在把你剛剛問到的線索用在改題上。', delay=0.5)
     send('你只需要改兩個地方其中之一（或兩個都改）：', delay=0.3)
     send_buttons(
@@ -538,14 +498,12 @@ def revise_question(q_info: dict) -> dict:
     do_stem    = revise_id in ('btn_revise_stem',    'btn_revise_both')
     do_options = revise_id in ('btn_revise_options', 'btn_revise_both')
 
-    # ── 修改題幹 ──
     if do_stem:
         result = collect_confirmed_input('請將修改後的完整題幹發送：')
         if result is None or result == '__INTERRUPTED__':
             return {}
         revised['revised_stem'] = result
 
-    # ── 修改選項 ──
     if do_options:
         if do_stem:
             send('接著，請發送四個選項。', delay=0.3)
@@ -563,7 +521,6 @@ def revise_question(q_info: dict) -> dict:
                 return {}
             revised[key] = result
 
-    # ── 展示修改結果 ──
     summary_lines = [f'✅ 第 {q_info.get("q_key", "")} 題修改完成！\n']
     summary_lines.append(f'題幹：{revised["revised_stem"]}')
     summary_lines.append(f'A（正確）：{revised["revised_correct"]}')
@@ -596,18 +553,15 @@ def load_pd_report(path: str) -> dict:
         line = line.strip()
         if not line or line.startswith('題目') or line.startswith('─'):
             continue
-
         parts = [p.strip() for p in line.split('｜')]
         if len(parts) < 4:
             continue
-
         q_key = parts[0].replace('\u3000', '').replace(' ', '')
         try:
             p_val = float(parts[1])
             d_val = float(parts[2])
         except ValueError:
             continue
-
         label = parts[3]
         result[q_key] = {'p': p_val, 'd': d_val, 'label': label}
 
@@ -616,9 +570,6 @@ def load_pd_report(path: str) -> dict:
 
 
 def _extract_pd_from_log(logfile: str) -> dict:
-    """嘗試從一般 session log 中擷取類似 PD 報告的行。
-    會尋找含有 '｜' 分隔且第二／第三欄可解析為 float 的行。
-    """
     out = {}
     if not os.path.exists(logfile):
         return out
@@ -646,23 +597,22 @@ def _extract_pd_from_log(logfile: str) -> dict:
 
 
 def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
-    """直接複製自 va_pd.py 的 calc_pd 邏輯。"""
     CORRECT_ANS = '1'
-    N_GROUP = 10
-    
+    N_GROUP     = 10
+
     matrix_path = os.path.join(session_dir, f"{user_name}_AnswerMatrix.csv")
     if not os.path.exists(matrix_path):
         print(f"[true_ending] AnswerMatrix 不存在：{matrix_path}")
         return {}
 
-    answers = []
+    answers       = []
     question_keys = []
     try:
         with open(matrix_path, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
-            rows = list(reader)
+            rows   = list(reader)
         if rows:
-            header = rows[0]
+            header        = rows[0]
             question_keys = [h for h in header if re.match(r'^Q\d+$', h)]
         for row in rows[1:]:
             if not row:
@@ -674,14 +624,10 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
 
     n = len(answers)
     if n == 0:
-        print(f"[true_ending] AnswerMatrix 無作答資料")
+        print("[true_ending] AnswerMatrix 無作答資料")
         return {}
 
-    scores = []
-    for row in answers:
-        score = sum(1 for ans in row if ans == CORRECT_ANS)
-        scores.append(score)
-
+    scores       = [sum(1 for ans in row if ans == CORRECT_ANS) for row in answers]
     indexed      = sorted(enumerate(scores), key=lambda x: x[1])
     low_indices  = [i for i, _ in indexed[:N_GROUP]]
     high_indices = [i for i, _ in indexed[-N_GROUP:]]
@@ -695,11 +641,7 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
         low_correct  = sum(1 for i in low_indices  if q_idx < len(answers[i]) and answers[i][q_idx] == CORRECT_ANS)
         d = round(high_correct / N_GROUP - low_correct / N_GROUP, 3)
 
-        result[q_key] = {
-            'p':       p,
-            'd':       d,
-            'label':   '',
-        }
+        result[q_key] = {'p': p, 'd': d, 'label': ''}
 
     print(f"[true_ending] 從 AnswerMatrix 計算 PD：{len(result)} 題")
     return result
@@ -709,6 +651,9 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
 # 讀取題庫 log
 # ──────────────────────────────────────────
 def load_que_log(path: str) -> dict:
+    """
+    回傳 {q_key_str: {英文field: value}} dict，key 為 'Q1'、'Q2'…字串。
+    """
     result = {}
     if not os.path.exists(path):
         print(f"[true_ending] 題庫不存在：{path}")
@@ -723,12 +668,29 @@ def load_que_log(path: str) -> dict:
 
     blocks = re.findall(r'\[Q(\d+)_START\](.*?)\[Q\1_END\]', content, re.DOTALL)
 
+    field_map = {
+        '題幹':     'stem',
+        '概念標籤': 'concept',
+        '關鍵線索': 'clues',
+        '正確答案A': 'correct',
+        '錯誤選項B': 'opt_b',
+        '錯誤選項C': 'opt_c',
+        '錯誤選項D': 'opt_d',
+        '易錯選項1': 'distractor_1',
+        '易錯選項2': 'distractor_2',
+        '易錯推測1': 'misconception_1',
+        '易錯推測2': 'misconception_2',
+    }
+
     for num_str, block in blocks:
         q_key  = f'Q{num_str}'
         q_data = {}
 
         for line in block.strip().splitlines():
             line = line.strip()
+            # 去除時間戳前綴（相容有時間戳與無時間戳兩種格式）
+            if re.match(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ', line):
+                line = line.split('] ', 1)[1].strip()
             if not line:
                 continue
 
@@ -738,22 +700,7 @@ def load_que_log(path: str) -> dict:
 
             field = m.group(1).strip()
             value = m.group(2).strip()
-
-            field_map = {
-                '題幹':     'stem',
-                '概念標籤': 'concept',
-                '關鍵線索': 'clues',
-                '正確答案A': 'correct',
-                '錯誤選項B': 'opt_b',
-                '錯誤選項C': 'opt_c',
-                '錯誤選項D': 'opt_d',
-                '易錯選項1': 'distractor_1',
-                '易錯選項2': 'distractor_2',
-                '易錯推測1': 'misconception_1',
-                '易錯推測2': 'misconception_2',
-            }
-
-            key = field_map.get(field)
+            key   = field_map.get(field)
             if key:
                 q_data[key] = value
 
@@ -779,7 +726,6 @@ def find_weak_questions(pd_data: dict, que_data: dict, threshold=0.25) -> list:
             }
             entry.update(que_data.get(q_key, {}))
             weak.append(entry)
-
     return weak
 
 
@@ -787,7 +733,7 @@ def find_weak_questions(pd_data: dict, que_data: dict, threshold=0.25) -> list:
 # 主程式
 # ──────────────────────────────────────────
 def main():
-    pd_data  = load_pd_report(pd_txt_path)
+    pd_data = load_pd_report(pd_txt_path)
     if not pd_data:
         pd_data = _extract_pd_from_log(pd_txt_path)
     if not pd_data:
@@ -802,17 +748,17 @@ def main():
     try:
         if pd_data:
             _post('/push', {
-                'text':     f"__DATA__{json.dumps({'type':'pd_report','items':pd_data}, ensure_ascii=False)}",
-                'username': username,
+                'text':       f"__DATA__{json.dumps({'type':'pd_report','items':pd_data}, ensure_ascii=False)}",
+                'username':   username,
                 'session_id': session_id,
-                'log_path': ''
+                'log_path':   '',
             })
         if que_data:
             _post('/push', {
-                'text':     f"__DATA__{json.dumps({'type':'que_log','questions':que_data}, ensure_ascii=False)}",
-                'username': username,
+                'text':       f"__DATA__{json.dumps({'type':'que_log','questions':que_data}, ensure_ascii=False)}",
+                'username':   username,
                 'session_id': session_id,
-                'log_path': ''
+                'log_path':   '',
             })
     except Exception as e:
         print(f"[true_ending] 推送 PD/題庫失敗：{e}")
@@ -867,7 +813,7 @@ def main():
         pd_data = _compute_pd_from_answer_matrix(session_dir, username) or pd_data
         weak    = find_weak_questions(pd_data, que_data)
 
-        send(f'好，我們繼續！', delay=0.5)
+        send('好，我們繼續！', delay=0.5)
 
         if not weak:
             send('所有題目的鑑別度都已達標（D ≥ 0.25），不需要再修改了。', delay=0.5)
@@ -903,10 +849,8 @@ def main():
             send('請從列表中選擇題目。', delay=0.3)
             continue
 
-        # 從清單移除
         remaining_weak = [q for q in remaining_weak if q['q_key'] != selected_key]
 
-        # ── 發送題目預覽 ──
         q_preview = (
             f'讓我們來看看這一題：\n\n'
             f'【題幹】\n{selected_q.get("stem", "（無題幹）")}\n\n'
@@ -917,7 +861,6 @@ def main():
         )
         send(q_preview, delay=0.5)
 
-        # ── 發送問題診斷選單 ──
         send(f'那麼首先，你覺得第 {selected_key} 題要先改哪裡？', delay=0.5)
         send_buttons(
             labels     = ['題幹不清楚／線索不夠',
@@ -937,7 +880,6 @@ def main():
 
         send('好，問題已經列清楚了。接下來，我們來問問看作答的AI孿生學生為何這麼作答吧！', delay=0.5)
 
-        # ── 讀取作答矩陣（只呼叫一次）──
         answers = load_answer_matrix(session_dir, username)
         q_idx   = int(selected_key.replace('Q', '')) - 1
         q_info  = selected_q
@@ -953,7 +895,6 @@ def main():
         if correct_student:
             correct_student['_target'] = '1'
 
-        # ── 組合可用按鈕 ──
         btn_labels = []
         btn_ids    = []
         btn_colors = []
@@ -989,7 +930,6 @@ def main():
             interview_student(correct_student, q_info, '答對')
             interviewed.add('correct')
 
-        # ── 召喚另一個學生 ──
         if has_both and len(interviewed) < 2:
             other_label = '答對的學生' if 'wrong' in interviewed else '答錯的學生'
             send_buttons(
@@ -1011,63 +951,71 @@ def main():
                 elif 'correct' in interviewed and wrong_student:
                     interview_student(wrong_student, q_info, '答錯')
 
-        # ── 進入題目修改流程 ──
         q_info['q_key'] = selected_key
         revised = revise_question(q_info)
         if not revised:
             return
         all_revised[selected_key] = revised
 
-    # ── 所有弱題修改完畢，進入第二輪驗證 ──
     run_second_round(all_revised, que_data)
 
 
 # ──────────────────────────────────────────
 # 將修改結果寫入新的 que_set_log（供第二輪使用）
 # ──────────────────────────────────────────
+
+# load_que_log 輸出的 value dict 使用英文 key（stem, opt_b …）
+# write_revised_que_log 寫出時必須還原為中文 key，讓 _load_revised_que_data 能解析
+ENGLISH_TO_CN = {
+    'stem':            '題幹',
+    'concept':         '概念標籤',
+    'clues':           '關鍵線索',
+    'correct':         '正確答案A',
+    'opt_b':           '錯誤選項B',
+    'opt_c':           '錯誤選項C',
+    'opt_d':           '錯誤選項D',
+    'distractor_1':    '易錯選項1',
+    'distractor_2':    '易錯選項2',
+    'misconception_1': '易錯推測1',
+    'misconception_2': '易錯推測2',
+}
+
+
 def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
     """
-    以原始 que_data 為基底，將 all_revised 的修改覆蓋進去，
-    寫出新的 que_set_log 檔案，回傳檔案路徑。
+    以 original_que_data（英文 key）為基底，覆蓋 all_revised 的修改，
+    寫出無時間戳格式的新 que_set_log，讓 _load_revised_que_data 的 regex 能正確解析。
+    回傳檔案路徑，失敗回傳空字串。
     """
     ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
     out_path = os.path.join(session_dir, f"{session_id}_que_set_log_r2_{ts}.txt")
-    now_str  = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     try:
         with open(out_path, 'w', encoding='utf-8') as f:
-            def normalize_key(key):
-                if isinstance(key, int):
-                    return f'Q{key}'
-                key_str = str(key)
-                return key_str if key_str.startswith('Q') else f'Q{key_str}'
+            for q_key in sorted(all_revised.keys(),
+                                key=lambda x: int(str(x).lstrip('Q'))):
+                # 統一成 'Q1' 格式
+                q_key_str = str(q_key) if str(q_key).startswith('Q') else f'Q{q_key}'
 
-            normalized_revised = {
-                normalize_key(k): v
-                for k, v in all_revised.items()
-            }
-            revised_keys = sorted(normalized_revised.keys(),
-                                  key=lambda x: int(str(x).lstrip('Q')))
+                orig_q = original_que_data.get(q_key_str, {})
+                rev    = all_revised[q_key]
 
-            for q_key in revised_keys:
-                orig_q = original_que_data.get(q_key) or original_que_data.get(int(q_key.lstrip('Q')))
-                if not orig_q:
-                    continue
+                # 從英文 key 還原為中文 key，再套上修改值
+                merged = {cn: orig_q.get(en, '') for en, cn in ENGLISH_TO_CN.items()}
+                merged['題幹']      = rev.get('revised_stem',    merged.get('題幹',      ''))
+                merged['正確答案A'] = rev.get('revised_correct', merged.get('正確答案A', ''))
+                merged['錯誤選項B'] = rev.get('revised_opt_b',   merged.get('錯誤選項B', ''))
+                merged['錯誤選項C'] = rev.get('revised_opt_c',   merged.get('錯誤選項C', ''))
+                merged['錯誤選項D'] = rev.get('revised_opt_d',   merged.get('錯誤選項D', ''))
 
-                q = dict(orig_q)
-                rev = normalized_revised[q_key]
-                q['題幹']      = rev.get('revised_stem',    q.get('題幹',      ''))
-                q['正確答案A'] = rev.get('revised_correct', q.get('正確答案A', ''))
-                q['錯誤選項B'] = rev.get('revised_opt_b',   q.get('錯誤選項B', ''))
-                q['錯誤選項C'] = rev.get('revised_opt_c',   q.get('錯誤選項C', ''))
-                q['錯誤選項D'] = rev.get('revised_opt_d',   q.get('錯誤選項D', ''))
-
-                f.write(f'[{now_str}] [{q_key}_START]\n')
-                for field, value in q.items():
-                    f.write(f'[{now_str}] [{q_key}] {field}={value}\n')
-                f.write(f'[{now_str}] [{q_key}_END]\n\n')
+                # 不加時間戳，確保 _load_revised_que_data 的 regex 能直接匹配
+                f.write(f'[{q_key_str}_START]\n')
+                for cn_key, value in merged.items():
+                    f.write(f'[{q_key_str}] {cn_key}={value}\n')
+                f.write(f'[{q_key_str}_END]\n\n')
 
         print(f"[write_revised_que_log] 已寫出：{out_path}")
+        _write_log(f'[true_ending] revised_que_log 已寫出：{out_path}')
     except Exception as e:
         print(f"[write_revised_que_log] 寫入失敗：{e}")
         return ''
@@ -1075,9 +1023,8 @@ def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
     return out_path
 
 
-
 # ──────────────────────────────────────────
-# 第二輪核心：AI 孿生作答（內嵌自 que_ana.py）
+# 第二輪核心：AI 孿生作答
 # ──────────────────────────────────────────
 
 QA_SYSTEM_PROMPT = """\
@@ -1109,15 +1056,12 @@ MAX_STUDENTS_R2 = 30
 
 
 def _qa_load_wide_table() -> list:
-    """讀取 validity_wide_table.csv"""
-    from pathlib import Path as _Path
     logs_dir   = os.path.dirname(session_dir)
     table_path = os.path.join(logs_dir, 'validity_wide_table.csv')
     lock_path  = table_path + '.lock'
 
-    # 取得檔案鎖
     import time as _time
-    start = _time.time()
+    start    = _time.time()
     acquired = False
     while True:
         try:
@@ -1135,7 +1079,7 @@ def _qa_load_wide_table() -> list:
     try:
         with open(table_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            rows = list(reader)
+            rows   = list(reader)
         print(f'[wide_table] 讀取 {len(rows)} 筆')
     except Exception as e:
         print(f'[wide_table 讀取失敗] {e}')
@@ -1148,7 +1092,6 @@ def _qa_load_wide_table() -> list:
 
 
 def _qa_que_info_summary(que_data: dict) -> str:
-    """將 que_data 整理為 prompt 用的補充文字"""
     if not que_data:
         return ''
     lines = ['【出題者提供的額外資訊】']
@@ -1164,7 +1107,6 @@ def _qa_que_info_summary(que_data: dict) -> str:
 
 
 def _qa_row_to_prompt(row: dict, questions: list, que_data: dict) -> str:
-    """組裝單一學生的 prompt"""
     stats = (
         f"accuracy={row.get('accuracy','')}  "
         f"avg_confidence={row.get('avg_confidence','')}  "
@@ -1186,14 +1128,17 @@ def _qa_row_to_prompt(row: dict, questions: list, que_data: dict) -> str:
 
 
 def _qa_build_questions(que_data: dict) -> list:
-    """從 que_data dict 組裝 questions list"""
+    """
+    從 _load_revised_que_data 回傳的 dict（key 為 int，value 為中文 key）
+    組裝 questions list。
+    """
     questions = []
     for n in sorted(que_data.keys()):
         q = que_data[n]
         if all(k in q for k in ('題幹', '正確答案A', '錯誤選項B', '錯誤選項C', '錯誤選項D')):
             questions.append({
-                'q_key': f'Q{n}' if isinstance(n, int) or str(n).isdigit() else str(n),
-                'stem': q['題幹'],
+                'q_key':   f'Q{n}' if isinstance(n, int) or str(n).isdigit() else str(n),
+                'stem':    q['題幹'],
                 'options': {
                     'A': q['正確答案A'],
                     'B': q['錯誤選項B'],
@@ -1204,18 +1149,16 @@ def _qa_build_questions(que_data: dict) -> list:
     return questions
 
 
-def _qa_save_answer_matrix(answers: list, question_keys: list[str], round_tag: str = 'r2') -> str:
-    """儲存作答矩陣，回傳路徑"""
-    ts             = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_path       = os.path.join(session_dir, f"{username}_AnswerMatrix_{round_tag}_{ts}.csv")
-    question_count = len(question_keys)
-    header         = question_keys + ['Total']
+def _qa_save_answer_matrix(answers: list, question_keys: list, round_tag: str = 'r2') -> str:
+    ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
+    out_path = os.path.join(session_dir, f"{username}_AnswerMatrix_{round_tag}_{ts}.csv")
+    header   = question_keys + ['Total']
     try:
         with open(out_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(header)
             for row in answers:
-                binary = [1 if ans == 'A' else 0 for ans in row[:question_count]]
+                binary = [1 if ans == 'A' else 0 for ans in row[:len(question_keys)]]
                 writer.writerow(binary + [sum(binary)])
         print(f'[AnswerMatrix_r2] 已儲存：{out_path}（{len(answers)} 筆）')
         _write_log(f'[true_ending] AnswerMatrix_r2 已儲存：{out_path}')
@@ -1226,10 +1169,6 @@ def _qa_save_answer_matrix(answers: list, question_keys: list[str], round_tag: s
 
 
 def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
-    """
-    驅動孿生班級作答修改後考卷。
-    回傳 (all_answers, questions)。
-    """
     rows = _qa_load_wide_table()
     if not rows:
         return [], []
@@ -1239,8 +1178,8 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
         print(f'[_qa_run_twins] 題數不足：{len(questions)}')
         return [], questions
 
-    target_rows = rows[:MAX_STUDENTS_R2]
-    all_answers = []
+    target_rows    = rows[:MAX_STUDENTS_R2]
+    all_answers    = []
     expected_count = len(questions)
 
     for idx, row in enumerate(target_rows):
@@ -1293,8 +1232,8 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         return
 
     # ── 寫出修改後的 que_set_log ──
-    revised_que_log = write_revised_que_log(original_que_data, all_revised)
-    if not revised_que_log:
+    revised_que_log_path = write_revised_que_log(original_que_data, all_revised)
+    if not revised_que_log_path:
         send('⚠️ 修改後題庫寫入失敗，請通知系統管理員。', delay=0.3)
         return
 
@@ -1302,7 +1241,14 @@ def run_second_round(all_revised: dict, original_que_data: dict):
     _thinking(True)
 
     # ── 讀取修改後的 que_data（供作答使用）──
-    revised_que_data = _load_revised_que_data(revised_que_log)
+    revised_que_data = _load_revised_que_data(revised_que_log_path)
+    if not revised_que_data:
+        _thinking(False)
+        send('⚠️ 修改後題庫讀取失敗，請通知系統管理員。', delay=0.3)
+        _write_log('[true_ending] _load_revised_que_data 回傳空值，流程中止')
+        return
+
+    print(f"[run_second_round] revised_que_data 題數：{len(revised_que_data)}")
 
     # ── 驅動孿生班級作答 ──
     all_answers, questions = _qa_run_twins(revised_que_data)
@@ -1314,14 +1260,13 @@ def run_second_round(all_revised: dict, original_que_data: dict):
 
     # ── 儲存作答矩陣 ──
     question_keys = [q['q_key'] for q in questions]
-    matrix_path = _qa_save_answer_matrix(all_answers, question_keys)
+    matrix_path   = _qa_save_answer_matrix(all_answers, question_keys)
     if not matrix_path:
         send('⚠️ 作答矩陣儲存失敗，請通知系統管理員。', delay=0.3)
         return
 
     # ── 推送統計資料到前端 ──
-    import json
-    question_count = len(all_answers[0]) if all_answers else 0
+    question_count  = len(all_answers[0]) if all_answers else 0
     correct_answers = ['A'] * question_count
     stats = {}
     for q_idx in range(question_count):
@@ -1334,18 +1279,25 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         stats[key] = counts
 
     students = [
-        {'id': i + 1, 'answers': row,
-         'score': sum(1 for qi, a in enumerate(row) if qi < question_count and a == correct_answers[qi])}
+        {
+            'id':      i + 1,
+            'answers': row,
+            'score':   sum(1 for qi, a in enumerate(row) if qi < question_count and a == correct_answers[qi]),
+        }
         for i, row in enumerate(all_answers)
     ]
     push_data = json.dumps({
-        'type': 'answer_matrix', 'stats': stats,
-        'n_students': len(all_answers), 'students': students,
-        'correct': correct_answers,
+        'type':       'answer_matrix',
+        'stats':      stats,
+        'n_students': len(all_answers),
+        'students':   students,
+        'correct':    correct_answers,
     }, ensure_ascii=False)
     _post('/push', {
-        'text': f'__DATA__{push_data}',
-        'username': username, 'session_id': session_id, 'log_path': '',
+        'text':       f'__DATA__{push_data}',
+        'username':   username,
+        'session_id': session_id,
+        'log_path':   '',
     })
 
     send(
@@ -1355,31 +1307,37 @@ def run_second_round(all_revised: dict, original_que_data: dict):
     )
     _write_log(f'[true_ending] 第二輪作答完成，共 {len(all_answers)} 筆')
 
-    # ── 啟動 te_pd.py（取代 va_pd.py）──
+    # ── 啟動 te_pd.py ──
     import sys
     import subprocess
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    base_args  = [
+    script_dir_abs = os.path.dirname(os.path.abspath(__file__))
+    base_args      = [
         '--username',   username,
         '--session_id', session_id,
         '--log_path',   log_path,
-        '--que_log',    revised_que_log,
+        '--que_log',    revised_que_log_path,   # ← 傳入本輪寫出的路徑
     ]
     try:
         subprocess.Popen(
             [sys.executable, 'te_pd.py'] + base_args,
-            cwd = script_dir,
+            cwd=script_dir_abs,
         )
-        print(f'[run_second_round] 已啟動 te_pd.py')
+        print('[run_second_round] 已啟動 te_pd.py')
         _write_log('[true_ending] te_pd.py 已啟動')
     except Exception as e:
         print(f'[run_second_round] 啟動 te_pd.py 失敗：{e}')
         send(f'⚠️ te_pd.py 啟動失敗，請通知系統管理員。\n錯誤訊息：{e}', delay=0.3)
 
 
+# ──────────────────────────────────────────
+# 讀取修改版 que_set_log（無時間戳格式）
+# ──────────────────────────────────────────
 def _load_revised_que_data(revised_que_log_path: str) -> dict:
-    """讀取剛寫出的修改版 que_set_log，回傳與 load_que_log 相同格式的 dict（key 為 int）"""
+    """
+    讀取 write_revised_que_log 寫出的檔案（無時間戳格式），
+    回傳 {int: {中文field: value}} dict，key 為整數題號。
+    """
     result = {}
     try:
         with open(revised_que_log_path, 'r', encoding='utf-8') as f:
@@ -1389,26 +1347,28 @@ def _load_revised_que_data(revised_que_log_path: str) -> dict:
         return result
 
     blocks = re.findall(r'\[Q(\d+)_START\](.*?)\[Q\1_END\]', content, re.DOTALL)
-    field_map = {
-        '題幹': '題幹', '概念標籤': '概念標籤', '關鍵線索': '關鍵線索',
-        '正確答案A': '正確答案A', '錯誤選項B': '錯誤選項B',
-        '錯誤選項C': '錯誤選項C', '錯誤選項D': '錯誤選項D',
-        '易錯選項1': '易錯選項1', '易錯選項2': '易錯選項2',
-        '易錯推測1': '易錯推測1', '易錯推測2': '易錯推測2',
+    if not blocks:
+        print(f'[_load_revised_que_data] 找不到任何題目區塊，請確認檔案格式：{revised_que_log_path}')
+        return result
+
+    CN_FIELDS = {
+        '題幹', '概念標籤', '關鍵線索',
+        '正確答案A', '錯誤選項B', '錯誤選項C', '錯誤選項D',
+        '易錯選項1', '易錯選項2', '易錯推測1', '易錯推測2',
     }
+
     for num_str, block in blocks:
         n      = int(num_str)
         q_data = {}
         for line in block.strip().splitlines():
             line = line.strip()
-            # 去掉時間戳
-            if re.match(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ', line):
-                line = line.split('] ', 1)[1].strip()
+            if not line:
+                continue
             m = re.match(r'\[Q\d+\]\s*(.+?)=(.+)', line)
             if m:
                 field = m.group(1).strip()
                 value = m.group(2).strip()
-                if field in field_map:
+                if field in CN_FIELDS:
                     q_data[field] = value
         result[n] = q_data
 
