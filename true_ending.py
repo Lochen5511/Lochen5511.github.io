@@ -653,6 +653,7 @@ def _compute_pd_from_answer_matrix(session_dir: str, user_name: str) -> dict:
 def load_que_log(path: str) -> dict:
     """
     回傳 {q_key_str: {英文field: value}} dict，key 為 'Q1'、'Q2'…字串。
+    相容有時間戳（原始格式）與無時間戳（write_revised_que_log 寫出格式）兩種。
     """
     result = {}
     if not os.path.exists(path):
@@ -666,7 +667,16 @@ def load_que_log(path: str) -> dict:
         print(f"[true_ending] 題庫讀取失敗：{e}")
         return result
 
-    blocks = re.findall(r'\[Q(\d+)_START\](.*?)\[Q\1_END\]', content, re.DOTALL)
+    # 剝除每行的時間戳前綴，統一格式後再解析
+    # [2026-06-10 14:41:38] [Q1_START]  →  [Q1_START]
+    clean_lines = []
+    for line in content.splitlines():
+        stripped = re.sub(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*', '', line)
+        clean_lines.append(stripped)
+    clean_content = '\n'.join(clean_lines)
+
+    blocks = re.findall(r'\[Q(\d+)_START\](.*?)\[Q\1_END\]', clean_content, re.DOTALL)
+    print(f"[load_que_log] 找到 {len(blocks)} 個題目區塊")
 
     field_map = {
         '題幹':     'stem',
@@ -688,16 +698,11 @@ def load_que_log(path: str) -> dict:
 
         for line in block.strip().splitlines():
             line = line.strip()
-            # 去除時間戳前綴（相容有時間戳與無時間戳兩種格式）
-            if re.match(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ', line):
-                line = line.split('] ', 1)[1].strip()
             if not line:
                 continue
-
             m = re.match(r'\[Q\d+\]\s*(.+?)=(.+)', line)
             if not m:
                 continue
-
             field = m.group(1).strip()
             value = m.group(2).strip()
             key   = field_map.get(field)
@@ -705,6 +710,7 @@ def load_que_log(path: str) -> dict:
                 q_data[key] = value
 
         result[q_key] = q_data
+        print(f"[load_que_log] {q_key}: stem={q_data.get('stem','')[:20]}...")
 
     print(f"[true_ending] 讀取題庫：{len(result)} 題")
     return result
