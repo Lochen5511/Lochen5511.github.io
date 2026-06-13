@@ -55,12 +55,17 @@ print(f"[true_ending] 題庫路徑：  {que_log_path}")
 # 若 que_set_log 不存在，嘗試在 session_dir 中尋找任意 "*_que_set_log.txt" 作為 fallback
 if not os.path.exists(que_log_path):
     try:
+        candidates = []
         for fn in os.listdir(session_dir):
             if fn.endswith('_que_set_log.txt'):
-                alt = os.path.join(session_dir, fn)
-                print(f"[true_ending] que_set_log 未找到，使用備援：{alt}")
-                que_log_path = alt
-                break
+                full = os.path.join(session_dir, fn)
+                candidates.append((os.path.getmtime(full), full))
+        if candidates:
+            candidates.sort(reverse=True)
+            que_log_path = candidates[0][1]
+            print(f"[true_ending] que_set_log 未找到，使用最新備援：{que_log_path}")
+        else:
+            print(f"[true_ending] que_set_log 備援也找不到，session_dir={session_dir}")
     except Exception as e:
         print(f"[true_ending] 檢查 session_dir 時發生錯誤：{e}")
 
