@@ -1267,7 +1267,149 @@ def run_second_round(all_revised: dict, original_que_data: dict):
 
     if not all_answers:
         send('⚠️ 孿生班級作答失敗，請通知系統管理員。', delay=0.3)
-        return
+        send('看起來可能是部分題目的格式有問題，請選擇要修改的題數：', delay=0.5)
+
+        # ── 讓使用者選擇要修改的題數 ──
+        send_buttons(
+            labels     = [f'{i} 題' for i in range(1, 9)],
+            button_ids = [f'btn_retry_count_{i}' for i in range(1, 9)],
+            delay      = 0.5,
+        )
+
+        count_choice = wait_for_user()
+        if count_choice is None or count_choice == '__INTERRUPTED__':
+            return
+
+        count_id = count_choice.split(':', 1)[0] if ':' in count_choice else count_choice
+        try:
+            retry_count = int(count_id.replace('btn_retry_count_', ''))
+        except ValueError:
+            send('題數格式錯誤，流程中止。', delay=0.3)
+            return
+
+        send(f'好的，請依序輸入 {retry_count} 題的修改內容。', delay=0.3)
+
+        # ── 循環輸入每題修改後的題號、題幹與答案，並組成指定格式 ──
+        manual_revisions = {}
+        revision_blocks = []
+
+        for idx in range(retry_count):
+            send(f'請輸入第 {idx + 1} 題要修改的題號（例如：Q1）：', delay=0.3)
+            q_id_input = wait_for_user()
+            if q_id_input is None or q_id_input == '__INTERRUPTED__':
+                return
+            q_id_raw = q_id_input.split(':', 1)[-1].strip() if ':' in q_id_input else q_id_input.strip()
+            q_id = q_id_raw.upper()
+            q_num = q_id.replace('Q', '')
+            if not q_num.isdigit():
+                send(f'{q_id} 不是有效題號，流程中止。', delay=0.3)
+                return
+            q_index = int(q_num)
+
+            send(f'請輸入 {q_id} 修改後的「題幹」：', delay=0.3)
+            stem_input = wait_for_user()
+            if stem_input is None or stem_input == '__INTERRUPTED__':
+                return
+            stem = stem_input.split(':', 1)[-1].strip() if ':' in stem_input else stem_input.strip()
+
+            send(f'請輸入 {q_id} 修改後的「正確答案A」：', delay=0.3)
+            answer_a_input = wait_for_user()
+            if answer_a_input is None or answer_a_input == '__INTERRUPTED__':
+                return
+            answer_a = answer_a_input.split(':', 1)[-1].strip() if ':' in answer_a_input else answer_a_input.strip()
+
+            send(f'請輸入 {q_id} 修改後的「錯誤選項B」：', delay=0.3)
+            answer_b_input = wait_for_user()
+            if answer_b_input is None or answer_b_input == '__INTERRUPTED__':
+                return
+            answer_b = answer_b_input.split(':', 1)[-1].strip() if ':' in answer_b_input else answer_b_input.strip()
+
+            send(f'請輸入 {q_id} 修改後的「錯誤選項C」：', delay=0.3)
+            answer_c_input = wait_for_user()
+            if answer_c_input is None or answer_c_input == '__INTERRUPTED__':
+                return
+            answer_c = answer_c_input.split(':', 1)[-1].strip() if ':' in answer_c_input else answer_c_input.strip()
+
+            send(f'請輸入 {q_id} 修改後的「錯誤選項D」：', delay=0.3)
+            answer_d_input = wait_for_user()
+            if answer_d_input is None or answer_d_input == '__INTERRUPTED__':
+                return
+            answer_d = answer_d_input.split(':', 1)[-1].strip() if ':' in answer_d_input else answer_d_input.strip()
+
+            manual_revisions[q_index] = {
+                'q_id':     q_id,
+                'stem':     stem,
+                'answer_a': answer_a,
+                'answer_b': answer_b,
+                'answer_c': answer_c,
+                'answer_d': answer_d,
+            }
+
+            # ── 組成指定輸出格式的區塊 ──
+            block = (
+                f'[{q_id}_START]\n'
+                f'[{q_id}] 題號={q_num}\n'
+                f'[{q_id}] 概念標籤=已省略\n'
+                f'[{q_id}] 題幹={stem}\n'
+                f'[{q_id}] 關鍵線索=已省略\n'
+                f'[{q_id}] 正確答案A={answer_a}\n'
+                f'[{q_id}] 錯誤選項B={answer_b}\n'
+                f'[{q_id}] 錯誤選項C={answer_c}\n'
+                f'[{q_id}] 錯誤選項D={answer_d}\n'
+                f'[{q_id}] 易錯選項1=已省略\n'
+                f'[{q_id}] 易錯選項2=已省略\n'
+                f'[{q_id}] 易錯推測1=已省略\n'
+                f'[{q_id}] 易錯推測2=已省略\n'
+                f'[{q_id}_END]'
+            )
+            revision_blocks.append(block)
+
+            send(f'{q_id} 修改內容已記錄。', delay=0.2)
+
+        # ── 將所有修改區塊合併成完整輸出 ──
+        manual_revision_text = '\n\n'.join(revision_blocks)
+        _write_log(f'[true_ending] 第二輪作答失敗，使用者手動修改題目：{list(manual_revisions.keys())}')
+        _write_log(f'[true_ending] 手動修改內容：\n{manual_revision_text}')
+
+        # ── 套用到 revised_que_data（依實際 parser 需求調整 key）──
+        for q_index, rev in manual_revisions.items():
+            if q_index in revised_que_data:
+                revised_que_data[q_index]['題幹']      = rev['stem']
+                revised_que_data[q_index]['正確答案A'] = rev['answer_a']
+                revised_que_data[q_index]['錯誤選項B'] = rev['answer_b']
+                revised_que_data[q_index]['錯誤選項C'] = rev['answer_c']
+                revised_que_data[q_index]['錯誤選項D'] = rev['answer_d']
+            else:
+                _write_log(f'[true_ending] 警告：Q{q_index} 不存在於 revised_que_data 中，跳過')
+
+        # ── 發送讓孿生作答的按鈕 ──
+        send('修改完成！', delay=0.3)
+        send_button(
+            label     = '讓孿生班級重新作答一次',
+            color     = 'gold',
+            size      = 'medium',
+            button_id = 'btn_retry_second_round',
+            delay     = 0.5,
+        )
+
+        retry_choice = wait_for_user()
+        if retry_choice is None or retry_choice == '__INTERRUPTED__':
+            return
+
+        retry_choice_id = retry_choice.split(':')[0] if ':' in retry_choice else retry_choice
+        if retry_choice_id != 'btn_retry_second_round':
+            return
+
+        send('好的！孿生班級正在重新作答中，請稍候……', delay=0.3)
+        _thinking(True)
+
+        all_answers, questions = _qa_run_twins(revised_que_data)
+        _thinking(False)
+
+        if not all_answers:
+            send('⚠️ 孿生班級重新作答仍失敗，請通知系統管理員。', delay=0.3)
+            _write_log(f'[true_ending] 第二輪作答重試後仍失敗，流程中止。revised_que_data 題數：{len(revised_que_data)}')
+            return
 
     # ── 儲存作答矩陣 ──
     question_keys = [q['q_key'] for q in questions]
