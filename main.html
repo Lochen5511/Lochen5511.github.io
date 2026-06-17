@@ -1147,14 +1147,10 @@
     appendMsg(msg, 'user');
     logMsg('user', msg);
 
+    // 一次性送出兩個選擇，用 || 串接，避免分兩次送造成的時序問題
     post('/button_click', {
-      message: `cb_first:${chosen[0]}`, username: userName, session_id: sessionId,
+      message: `cb_pick:${chosen.join('||')}`, username: userName, session_id: sessionId,
     });
-    setTimeout(() => {
-      post('/button_click', {
-        message: `cb_second:${chosen[1]}`, username: userName, session_id: sessionId,
-      });
-    }, 1000);
   }
 
   function confirmDropdown(ddId) {

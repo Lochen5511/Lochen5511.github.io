@@ -357,28 +357,35 @@ def make_question(n, total, used_concepts):
         '接下來，請你挑出兩個「最容易讓人選錯」的選項。'
     ), delay=1)
 
+    options_list = [
+        f'B. {wrong_options[0]}',
+        f'C. {wrong_options[1]}',
+        f'D. {wrong_options[2]}',
+    ]
     send_checkbox(
-        options     = [
-            f'B. {wrong_options[0]}',
-            f'C. {wrong_options[1]}',
-            f'D. {wrong_options[2]}',
-        ],
+        options     = options_list,
         max_select  = 2,
         checkbox_id = f'cb_pick_{n}',
     )
 
-    first_pick = wait_for_user()
-    if is_exit(first_pick): return False
-    first_raw    = first_pick.replace('cb_first:', '').strip()
-    first_label  = first_raw
-    first_option = first_raw.split('. ', 1)[-1] if '. ' in first_raw else first_raw
+    picks = wait_for_user()
+    if is_exit(picks): return False
 
-    _lock(True)
-    second_pick = wait_for_user()
-    if is_exit(second_pick): return False
-    second_raw    = second_pick.replace('cb_second:', '').strip()
-    second_label  = second_raw
-    second_option = second_raw.split('. ', 1)[-1] if '. ' in second_raw else second_raw
+    raw    = picks.replace('cb_pick:', '').strip()
+    picked = [p.strip() for p in raw.split('||') if p.strip()]
+
+    if len(picked) != 2:
+        write_log(f'[命題{n}] 易錯選項格式異常，重新詢問: {picks}')
+        send('好像沒有正確收到兩個選項，請重新勾選並按確認：', delay=0.5)
+        send_checkbox(options=options_list, max_select=2, checkbox_id=f'cb_pick_{n}_retry')
+        picks = wait_for_user()
+        if is_exit(picks): return False
+        raw    = picks.replace('cb_pick:', '').strip()
+        picked = [p.strip() for p in raw.split('||') if p.strip()]
+
+    first_label, second_label = picked[0], picked[1]
+    first_option  = first_label.split('. ', 1)[-1]  if '. ' in first_label  else first_label
+    second_option = second_label.split('. ', 1)[-1] if '. ' in second_label else second_label
 
     write_log(f'[命題{n}] 易錯選項1={first_label} | 易錯選項2={second_label}')
 
