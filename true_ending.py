@@ -70,6 +70,16 @@ if not os.path.exists(que_log_path):
         print(f"[true_ending] 檢查 session_dir 時發生錯誤：{e}")
 
 # ──────────────────────────────────────────
+# que_set_log_r2 路徑（程式啟動時就確定，全域共用）
+# ──────────────────────────────────────────
+ts_start          = datetime.now().strftime('%Y%m%d_%H%M%S')
+REVISED_QUE_LOG_PATH = os.path.join(
+    session_dir,
+    f"{session_id}_que_set_log_r2_{ts_start}.txt"
+)
+print(f"[true_ending] que_set_log_r2 路徑：{REVISED_QUE_LOG_PATH}")
+
+# ──────────────────────────────────────────
 # 工具函數
 # ──────────────────────────────────────────
 def _post(path: str, body: dict):
@@ -673,7 +683,6 @@ def load_que_log(path: str) -> dict:
         return result
 
     # 剝除每行的時間戳前綴，統一格式後再解析
-    # [2026-06-10 14:41:38] [Q1_START]  →  [Q1_START]
     clean_lines = []
     for line in content.splitlines():
         stripped = re.sub(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*', '', line)
@@ -738,6 +747,62 @@ def find_weak_questions(pd_data: dict, que_data: dict, threshold=0.25) -> list:
             entry.update(que_data.get(q_key, {}))
             weak.append(entry)
     return weak
+
+
+# ──────────────────────────────────────────
+# 將單題修改結果立刻追加寫入 que_set_log_r2
+# ──────────────────────────────────────────
+ENGLISH_TO_CN = {
+    'stem':            '題幹',
+    'concept':         '概念標籤',
+    'clues':           '關鍵線索',
+    'correct':         '正確答案A',
+    'opt_b':           '錯誤選項B',
+    'opt_c':           '錯誤選項C',
+    'opt_d':           '錯誤選項D',
+    'distractor_1':    '易錯選項1',
+    'distractor_2':    '易錯選項2',
+    'misconception_1': '易錯推測1',
+    'misconception_2': '易錯推測2',
+}
+
+
+def append_revised_question(q_key: str, orig_q: dict, rev: dict) -> bool:
+    """
+    將單題修改結果追加寫入 REVISED_QUE_LOG_PATH。
+    orig_q 使用英文 key（來自 load_que_log）。
+    rev 使用 revised_* key（來自 revise_question）。
+    寫入失敗時回傳 False，並透過 send_alert 報錯。
+    """
+    q_key_str = str(q_key) if str(q_key).startswith('Q') else f'Q{q_key}'
+
+    # 以原始資料為底，套上修改值
+    merged = {cn: orig_q.get(en, '') for en, cn in ENGLISH_TO_CN.items()}
+    merged['題幹']      = rev.get('revised_stem',    merged.get('題幹',      ''))
+    merged['正確答案A'] = rev.get('revised_correct', merged.get('正確答案A', ''))
+    merged['錯誤選項B'] = rev.get('revised_opt_b',   merged.get('錯誤選項B', ''))
+    merged['錯誤選項C'] = rev.get('revised_opt_c',   merged.get('錯誤選項C', ''))
+    merged['錯誤選項D'] = rev.get('revised_opt_d',   merged.get('錯誤選項D', ''))
+
+    block_lines = [f'[{q_key_str}_START]']
+    for cn_key, value in merged.items():
+        block_lines.append(f'[{q_key_str}] {cn_key}={value}')
+    block_lines.append(f'[{q_key_str}_END]')
+    block_lines.append('')   # 題目之間空一行
+    block_text = '\n'.join(block_lines)
+
+    try:
+        with open(REVISED_QUE_LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(block_text + '\n')
+        print(f"[append_revised_question] {q_key_str} 已追加寫入 {REVISED_QUE_LOG_PATH}")
+        _write_log(f'[true_ending] {q_key_str} 修改已追加寫入 que_set_log_r2')
+        return True
+    except Exception as e:
+        err_msg = f'{q_key_str} 修改寫入失敗：{e}'
+        print(f"[append_revised_question] {err_msg}")
+        _write_log(f'[true_ending] {err_msg}')
+        send_alert(f'⚠️ {err_msg}\n請通知系統管理員，流程中止。')
+        return False
 
 
 # ──────────────────────────────────────────
@@ -966,72 +1031,16 @@ def main():
         revised = revise_question(q_info)
         if not revised:
             return
+
+        # ── 每題改完立刻追加寫入 que_set_log_r2 ──
+        orig_q = que_data.get(selected_key, {})
+        ok = append_revised_question(selected_key, orig_q, revised)
+        if not ok:
+            return   # send_alert 已在函式內發送，直接中止
+
         all_revised[selected_key] = revised
 
-    run_second_round(all_revised, que_data)
-
-
-# ──────────────────────────────────────────
-# 將修改結果寫入新的 que_set_log（供第二輪使用）
-# ──────────────────────────────────────────
-
-# load_que_log 輸出的 value dict 使用英文 key（stem, opt_b …）
-# write_revised_que_log 寫出時必須還原為中文 key，讓 _load_revised_que_data 能解析
-ENGLISH_TO_CN = {
-    'stem':            '題幹',
-    'concept':         '概念標籤',
-    'clues':           '關鍵線索',
-    'correct':         '正確答案A',
-    'opt_b':           '錯誤選項B',
-    'opt_c':           '錯誤選項C',
-    'opt_d':           '錯誤選項D',
-    'distractor_1':    '易錯選項1',
-    'distractor_2':    '易錯選項2',
-    'misconception_1': '易錯推測1',
-    'misconception_2': '易錯推測2',
-}
-
-
-def write_revised_que_log(original_que_data: dict, all_revised: dict) -> str:
-    """
-    以 original_que_data（英文 key）為基底，覆蓋 all_revised 的修改，
-    寫出無時間戳格式的新 que_set_log，讓 _load_revised_que_data 的 regex 能正確解析。
-    回傳檔案路徑，失敗回傳空字串。
-    """
-    ts       = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_path = os.path.join(session_dir, f"{session_id}_que_set_log_r2_{ts}.txt")
-
-    try:
-        with open(out_path, 'w', encoding='utf-8') as f:
-            for q_key in sorted(all_revised.keys(),
-                                key=lambda x: int(str(x).lstrip('Q'))):
-                # 統一成 'Q1' 格式
-                q_key_str = str(q_key) if str(q_key).startswith('Q') else f'Q{q_key}'
-
-                orig_q = original_que_data.get(q_key_str, {})
-                rev    = all_revised[q_key]
-
-                # 從英文 key 還原為中文 key，再套上修改值
-                merged = {cn: orig_q.get(en, '') for en, cn in ENGLISH_TO_CN.items()}
-                merged['題幹']      = rev.get('revised_stem',    merged.get('題幹',      ''))
-                merged['正確答案A'] = rev.get('revised_correct', merged.get('正確答案A', ''))
-                merged['錯誤選項B'] = rev.get('revised_opt_b',   merged.get('錯誤選項B', ''))
-                merged['錯誤選項C'] = rev.get('revised_opt_c',   merged.get('錯誤選項C', ''))
-                merged['錯誤選項D'] = rev.get('revised_opt_d',   merged.get('錯誤選項D', ''))
-
-                # 不加時間戳，確保 _load_revised_que_data 的 regex 能直接匹配
-                f.write(f'[{q_key_str}_START]\n')
-                for cn_key, value in merged.items():
-                    f.write(f'[{q_key_str}] {cn_key}={value}\n')
-                f.write(f'[{q_key_str}_END]\n\n')
-
-        print(f"[write_revised_que_log] 已寫出：{out_path}")
-        _write_log(f'[true_ending] revised_que_log 已寫出：{out_path}')
-    except Exception as e:
-        print(f"[write_revised_que_log] 寫入失敗：{e}")
-        return ''
-
-    return out_path
+    run_second_round(all_revised)
 
 
 # ──────────────────────────────────────────
@@ -1222,10 +1231,17 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
 # ──────────────────────────────────────────
 # 第二輪：讓孿生班級重新作答修改後的考卷
 # ──────────────────────────────────────────
-def run_second_round(all_revised: dict, original_que_data: dict):
+def run_second_round(all_revised: dict):
     send('你已經完成了所有弱題的修改，做得很好！', delay=1)
     send('接下來是最關鍵的一步：', delay=0.5)
     send('讓孿生班級把你的「修題後考卷」再寫一次，驗證修改是否真的讓題目變得更好。', delay=0.5)
+
+    # ── 確認 que_set_log_r2 確實存在 ──
+    if not os.path.exists(REVISED_QUE_LOG_PATH):
+        send_alert(f'⚠️ que_set_log_r2 不存在（{REVISED_QUE_LOG_PATH}），無法進行第二輪，請通知系統管理員。')
+        _write_log(f'[true_ending] run_second_round 中止：que_set_log_r2 不存在 {REVISED_QUE_LOG_PATH}')
+        return
+
     send_button(
         label     = '讓孿生班級再寫一次',
         color     = 'gold',
@@ -1242,21 +1258,15 @@ def run_second_round(all_revised: dict, original_que_data: dict):
     if choice_id != 'btn_run_second_round':
         return
 
-    # ── 寫出修改後的 que_set_log ──
-    revised_que_log_path = write_revised_que_log(original_que_data, all_revised)
-    if not revised_que_log_path:
-        send('⚠️ 修改後題庫寫入失敗，請通知系統管理員。', delay=0.3)
-        return
-
     send('好的！孿生班級正在用修改後的考卷作答中，請稍候……', delay=0.3)
     _thinking(True)
 
-    # ── 讀取修改後的 que_data（供作答使用）──
-    revised_que_data = _load_revised_que_data(revised_que_log_path)
+    # ── 讀取修改後的 que_data ──
+    revised_que_data = _load_revised_que_data(REVISED_QUE_LOG_PATH)
     if not revised_que_data:
         _thinking(False)
-        send('⚠️ 修改後題庫讀取失敗，請通知系統管理員。', delay=0.3)
-        _write_log('[true_ending] _load_revised_que_data 回傳空值，流程中止')
+        send_alert(f'⚠️ que_set_log_r2 讀取失敗（{REVISED_QUE_LOG_PATH}），請通知系統管理員。')
+        _write_log(f'[true_ending] _load_revised_que_data 回傳空值，流程中止')
         return
 
     print(f"[run_second_round] revised_que_data 題數：{len(revised_que_data)}")
@@ -1269,7 +1279,6 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         send('⚠️ 孿生班級作答失敗，請通知系統管理員。', delay=0.3)
         send('看起來可能是部分題目的格式有問題，請選擇要修改的題數：', delay=0.5)
 
-        # ── 讓使用者選擇要修改的題數 ──
         send_buttons(
             labels     = [f'{i} 題' for i in range(1, 9)],
             button_ids = [f'btn_retry_count_{i}' for i in range(1, 9)],
@@ -1289,9 +1298,8 @@ def run_second_round(all_revised: dict, original_que_data: dict):
 
         send(f'好的，請依序輸入 {retry_count} 題的修改內容。', delay=0.3)
 
-        # ── 循環輸入每題修改後的題號、題幹與答案，並組成指定格式 ──
         manual_revisions = {}
-        revision_blocks = []
+        revision_blocks  = []
 
         for idx in range(retry_count):
             send(f'請輸入第 {idx + 1} 題要修改的題號（例如：Q1）：', delay=0.3)
@@ -1299,7 +1307,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
             if q_id_input is None or q_id_input == '__INTERRUPTED__':
                 return
             q_id_raw = q_id_input.split(':', 1)[-1].strip() if ':' in q_id_input else q_id_input.strip()
-            q_id = q_id_raw.upper()
+            q_id  = q_id_raw.upper()
             q_num = q_id.replace('Q', '')
             if not q_num.isdigit():
                 send(f'{q_id} 不是有效題號，流程中止。', delay=0.3)
@@ -1345,7 +1353,6 @@ def run_second_round(all_revised: dict, original_que_data: dict):
                 'answer_d': answer_d,
             }
 
-            # ── 組成指定輸出格式的區塊 ──
             block = (
                 f'[{q_id}_START]\n'
                 f'[{q_id}] 題號={q_num}\n'
@@ -1363,15 +1370,12 @@ def run_second_round(all_revised: dict, original_que_data: dict):
                 f'[{q_id}_END]'
             )
             revision_blocks.append(block)
-
             send(f'{q_id} 修改內容已記錄。', delay=0.2)
 
-        # ── 將所有修改區塊合併成完整輸出 ──
         manual_revision_text = '\n\n'.join(revision_blocks)
         _write_log(f'[true_ending] 第二輪作答失敗，使用者手動修改題目：{list(manual_revisions.keys())}')
         _write_log(f'[true_ending] 手動修改內容：\n{manual_revision_text}')
 
-        # ── 套用到 revised_que_data（依實際 parser 需求調整 key）──
         for q_index, rev in manual_revisions.items():
             if q_index in revised_que_data:
                 revised_que_data[q_index]['題幹']      = rev['stem']
@@ -1382,7 +1386,6 @@ def run_second_round(all_revised: dict, original_que_data: dict):
             else:
                 _write_log(f'[true_ending] 警告：Q{q_index} 不存在於 revised_que_data 中，跳過')
 
-        # ── 發送讓孿生作答的按鈕 ──
         send('修改完成！', delay=0.3)
         send_button(
             label     = '讓孿生班級重新作答一次',
@@ -1415,7 +1418,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
     question_keys = [q['q_key'] for q in questions]
     matrix_path   = _qa_save_answer_matrix(all_answers, question_keys)
     if not matrix_path:
-        send('⚠️ 作答矩陣儲存失敗，請通知系統管理員。', delay=0.3)
+        send_alert('⚠️ 作答矩陣儲存失敗，請通知系統管理員。')
         return
 
     # ── 推送統計資料到前端 ──
@@ -1469,7 +1472,7 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         '--username',   username,
         '--session_id', session_id,
         '--log_path',   log_path,
-        '--que_log',    revised_que_log_path,   # ← 傳入本輪寫出的路徑
+        '--que_log',    REVISED_QUE_LOG_PATH,
     ]
     try:
         subprocess.Popen(
@@ -1480,17 +1483,13 @@ def run_second_round(all_revised: dict, original_que_data: dict):
         _write_log('[true_ending] te_pd.py 已啟動')
     except Exception as e:
         print(f'[run_second_round] 啟動 te_pd.py 失敗：{e}')
-        send(f'⚠️ te_pd.py 啟動失敗，請通知系統管理員。\n錯誤訊息：{e}', delay=0.3)
+        send_alert(f'⚠️ te_pd.py 啟動失敗，請通知系統管理員。\n錯誤訊息：{e}')
 
 
 # ──────────────────────────────────────────
 # 讀取修改版 que_set_log（無時間戳格式）
 # ──────────────────────────────────────────
 def _load_revised_que_data(revised_que_log_path: str) -> dict:
-    """
-    讀取 write_revised_que_log 寫出的檔案（無時間戳格式），
-    回傳 {int: {中文field: value}} dict，key 為整數題號。
-    """
     result = {}
     try:
         with open(revised_que_log_path, 'r', encoding='utf-8') as f:
@@ -1501,7 +1500,7 @@ def _load_revised_que_data(revised_que_log_path: str) -> dict:
 
     blocks = re.findall(r'\[Q(\d+)_START\](.*?)\[Q\1_END\]', content, re.DOTALL)
     if not blocks:
-        print(f'[_load_revised_que_data] 找不到任何題目區塊，請確認檔案格式：{revised_que_log_path}')
+        print(f'[_load_revised_que_data] 找不到任何題目區塊：{revised_que_log_path}')
         return result
 
     CN_FIELDS = {
