@@ -1047,12 +1047,14 @@ def main():
 # 第二輪核心：AI 孿生作答
 # ──────────────────────────────────────────
 
-QA_SYSTEM_PROMPT = """\
+# ── 修復：動態 system prompt，根據實際題數產生，避免 GPT 固定輸出 8 個答案 ──
+def _qa_build_system_prompt(n_questions: int) -> str:
+    return f"""\
 請依據以下註釋與學生的認知數值，預測這個學生回答以下題目的答案。
 
-重要：本次考卷的題目數量由使用者提供的實際題數決定，不一定是 8 題。
+本次考卷共 {n_questions} 題，你必須輸出恰好 {n_questions} 個答案，不多不少。
 
-accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 8 題 → 0.75。
+accuracy = 答對題數 ÷ 總題數。例如答對 6 題共 {n_questions} 題 → accuracy ≈ {round(6/n_questions, 2)}。
 avg_confidence = 所有題目的信心分數（1-5）加總 ÷ 題數。反映用戶對自己答案的整體把握程度。
 low_conf_ratio = 信心分數 ≤ 2 的題目數 ÷ 總題數。比例越高代表用戶越不確定自己的答案。
 high_conf_wrong_ratio = 信心分數 ≥ 4 但答錯的題目數 ÷ 總題數。這是最重要的指標之一，反映用戶「自信但錯誤」的程度，也就是迷思概念最強固的狀態。
@@ -1066,11 +1068,12 @@ V3a = V_CONSTRUCT_CONTENT_CONFUSE（把建構效度證據誤當內容效度）
 V3b = V_CONSTRUCT_CRITERION_CONFUSE（把建構效度證據誤當效標關聯效度）
 
 【重要輸出要求】
-- 只輸出答案，不輸出任何其他文字
-- 答案必須用逗號分隔：A,B,C,D 或其他組合
-- 答案數量必須完全符合提供的題目數量
-- 每個答案必須是單一大寫字母（A、B、C 或 D）\
+- 只輸出答案，不輸出任何其他文字、說明或標點以外的內容
+- 答案必須用英文逗號分隔，例如（{n_questions} 題時）：A,B,A,C,B,A,D{"" if n_questions <= 6 else ",A"}{"" if n_questions <= 7 else "," + ",".join(["B"]*(n_questions-7))}
+- 答案數量必須恰好是 {n_questions} 個，對應題目 1 到 {n_questions}
+- 每個答案必須是單一大寫字母，只能是 A、B、C 或 D 其中之一
 """
+
 
 MAX_STUDENTS_R2 = 30
 
@@ -1141,7 +1144,7 @@ def _qa_row_to_prompt(row: dict, questions: list, que_data: dict) -> str:
         for i, q in enumerate(questions)
     )
     extra  = _qa_que_info_summary(que_data)
-    prompt = f"學生數值：\n{stats}\n\n題目：\n{ques}"
+    prompt = f"學生數值：\n{stats}\n\n題目（共 {len(questions)} 題，請輸出恰好 {len(questions)} 個答案）：\n{ques}"
     if extra:
         prompt += f"\n\n{extra}"
     return prompt
@@ -1198,9 +1201,13 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
         print(f'[_qa_run_twins] 題數不足：{len(questions)}')
         return [], questions
 
+    n_questions    = len(questions)
+    # ── 修復：每次呼叫時動態產生 system prompt，題數正確注入 ──
+    system_prompt  = _qa_build_system_prompt(n_questions)
+    print(f'[_qa_run_twins] 題數={n_questions}，system prompt 已動態產生')
+
     target_rows    = rows[:MAX_STUDENTS_R2]
     all_answers    = []
-    expected_count = len(questions)
 
     for idx, row in enumerate(target_rows):
         user_prompt = _qa_row_to_prompt(row, questions, revised_que_data)
@@ -1209,7 +1216,7 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
                 model       = 'gpt-4o',
                 temperature = 0.3,
                 messages    = [
-                    {'role': 'system', 'content': QA_SYSTEM_PROMPT},
+                    {'role': 'system', 'content': system_prompt},
                     {'role': 'user',   'content': user_prompt},
                 ]
             )
@@ -1219,11 +1226,11 @@ def _qa_run_twins(revised_que_data: dict) -> tuple[list, list]:
             continue
 
         parts = [p.strip().upper() for p in reply.split(',')]
-        if len(parts) == expected_count and all(p in 'ABCD' for p in parts):
+        if len(parts) == n_questions and all(p in 'ABCD' for p in parts):
             all_answers.append(parts)
             print(f'[_qa_run_twins] 第 {idx+1} 筆：{parts}')
         else:
-            print(f'[_qa_run_twins] 第 {idx+1} 筆格式異常（預期 {expected_count} 題，收到 {len(parts)} 個），跳過：{reply}')
+            print(f'[_qa_run_twins] 第 {idx+1} 筆格式異常（預期 {n_questions} 題，收到 {len(parts)} 個），跳過：{reply}')
 
     return all_answers, questions
 
@@ -1299,18 +1306,21 @@ def run_second_round(all_revised: dict):
         send(f'好的，請依序輸入 {retry_count} 題的修改內容。', delay=0.3)
 
         for idx in range(retry_count):
-            send(f'請輸入第 {idx + 1} 題要修改的題號（例如：Q1）：', delay=0.3)
-            _lock(False)  # ← 修復：解鎖讓用戶輸入
-            q_id_input = wait_for_user()
-            if q_id_input is None or q_id_input == '__INTERRUPTED__':
-                return
-            q_id_raw = q_id_input.strip()
-            q_id  = q_id_raw.upper()
-            q_num = q_id.replace('Q', '')
-            if not q_num.isdigit():
-                send(f'{q_id} 不是有效題號，流程中止。', delay=0.3)
-                return
-            q_index = int(q_num)
+            # ── 題號輸入：while 重試，避免格式錯誤直接中止 ──
+            while True:
+                send(f'請輸入第 {idx + 1} 題要修改的題號（例如：Q1）：', delay=0.3)
+                _lock(False)
+                q_id_input = wait_for_user()
+                if q_id_input is None or q_id_input == '__INTERRUPTED__':
+                    return
+                print(f'[debug] q_id_input raw={repr(q_id_input)}')
+                q_id_raw = q_id_input.strip()
+                q_id     = q_id_raw.upper()
+                q_num    = q_id.replace('Q', '').strip()
+                if q_num.isdigit():
+                    q_index = int(q_num)
+                    break
+                send(f'「{q_id_input.strip()}」不是有效題號，請重新輸入。', delay=0.3)
 
             send(f'請輸入 {q_id} 修改後的「題幹」：', delay=0.3)
             _lock(False)
@@ -1347,15 +1357,17 @@ def run_second_round(all_revised: dict):
                 return
             answer_d = answer_d_input.strip()
 
-            # 更新記憶體中的 revised_que_data
+            # ── 更新記憶體中的 revised_que_data ──
             if q_index in revised_que_data:
                 revised_que_data[q_index]['題幹']      = stem
                 revised_que_data[q_index]['正確答案A'] = answer_a
                 revised_que_data[q_index]['錯誤選項B'] = answer_b
                 revised_que_data[q_index]['錯誤選項C'] = answer_c
                 revised_que_data[q_index]['錯誤選項D'] = answer_d
+                print(f'[run_second_round] Q{q_index} 已更新至 revised_que_data')
             else:
                 _write_log(f'[true_ending] 警告：Q{q_index} 不存在於 revised_que_data 中，跳過')
+                print(f'[run_second_round] 警告：Q{q_index} 不存在於 revised_que_data，現有 keys={list(revised_que_data.keys())}')
 
             send(f'{q_id} 修改內容已記錄。', delay=0.2)
 
@@ -1363,18 +1375,18 @@ def run_second_round(all_revised: dict):
         try:
             with open(REVISED_QUE_LOG_PATH, 'w', encoding='utf-8') as f:
                 for n in sorted(revised_que_data.keys()):
-                    q      = revised_que_data[n]
-                    q_id   = f'Q{n}'
-                    lines  = [f'[{q_id}_START]']
-                    for cn_key in ['題幹','概念標籤','關鍵線索',
-                                   '正確答案A','錯誤選項B','錯誤選項C','錯誤選項D',
-                                   '易錯選項1','易錯選項2','易錯推測1','易錯推測2']:
+                    q     = revised_que_data[n]
+                    q_id  = f'Q{n}'
+                    lines = [f'[{q_id}_START]']
+                    for cn_key in ['題幹', '概念標籤', '關鍵線索',
+                                   '正確答案A', '錯誤選項B', '錯誤選項C', '錯誤選項D',
+                                   '易錯選項1', '易錯選項2', '易錯推測1', '易錯推測2']:
                         val = q.get(cn_key, '')
                         lines.append(f'[{q_id}] {cn_key}={val}')
                     lines.append(f'[{q_id}_END]')
                     lines.append('')
                     f.write('\n'.join(lines) + '\n')
-            print(f'[run_second_round] REVISED_QUE_LOG_PATH 已更新：{REVISED_QUE_LOG_PATH}')
+            print(f'[run_second_round] REVISED_QUE_LOG_PATH 已覆寫：{REVISED_QUE_LOG_PATH}')
             _write_log(f'[true_ending] 手動修改後已覆寫 que_set_log_r2')
         except Exception as e:
             send_alert(f'⚠️ que_set_log_r2 覆寫失敗：{e}，請通知系統管理員。')
