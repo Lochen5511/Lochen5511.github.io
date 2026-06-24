@@ -1298,15 +1298,13 @@ def run_second_round(all_revised: dict):
 
         send(f'好的，請依序輸入 {retry_count} 題的修改內容。', delay=0.3)
 
-        manual_revisions = {}
-        revision_blocks  = []
-
         for idx in range(retry_count):
             send(f'請輸入第 {idx + 1} 題要修改的題號（例如：Q1）：', delay=0.3)
+            _lock(False)  # ← 修復：解鎖讓用戶輸入
             q_id_input = wait_for_user()
             if q_id_input is None or q_id_input == '__INTERRUPTED__':
                 return
-            q_id_raw = q_id_input.split(':', 1)[-1].strip() if ':' in q_id_input else q_id_input.strip()
+            q_id_raw = q_id_input.strip()
             q_id  = q_id_raw.upper()
             q_num = q_id.replace('Q', '')
             if not q_num.isdigit():
@@ -1315,76 +1313,72 @@ def run_second_round(all_revised: dict):
             q_index = int(q_num)
 
             send(f'請輸入 {q_id} 修改後的「題幹」：', delay=0.3)
+            _lock(False)
             stem_input = wait_for_user()
             if stem_input is None or stem_input == '__INTERRUPTED__':
                 return
-            stem = stem_input.split(':', 1)[-1].strip() if ':' in stem_input else stem_input.strip()
+            stem = stem_input.strip()
 
             send(f'請輸入 {q_id} 修改後的「正確答案A」：', delay=0.3)
+            _lock(False)
             answer_a_input = wait_for_user()
             if answer_a_input is None or answer_a_input == '__INTERRUPTED__':
                 return
-            answer_a = answer_a_input.split(':', 1)[-1].strip() if ':' in answer_a_input else answer_a_input.strip()
+            answer_a = answer_a_input.strip()
 
             send(f'請輸入 {q_id} 修改後的「錯誤選項B」：', delay=0.3)
+            _lock(False)
             answer_b_input = wait_for_user()
             if answer_b_input is None or answer_b_input == '__INTERRUPTED__':
                 return
-            answer_b = answer_b_input.split(':', 1)[-1].strip() if ':' in answer_b_input else answer_b_input.strip()
+            answer_b = answer_b_input.strip()
 
             send(f'請輸入 {q_id} 修改後的「錯誤選項C」：', delay=0.3)
+            _lock(False)
             answer_c_input = wait_for_user()
             if answer_c_input is None or answer_c_input == '__INTERRUPTED__':
                 return
-            answer_c = answer_c_input.split(':', 1)[-1].strip() if ':' in answer_c_input else answer_c_input.strip()
+            answer_c = answer_c_input.strip()
 
             send(f'請輸入 {q_id} 修改後的「錯誤選項D」：', delay=0.3)
+            _lock(False)
             answer_d_input = wait_for_user()
             if answer_d_input is None or answer_d_input == '__INTERRUPTED__':
                 return
-            answer_d = answer_d_input.split(':', 1)[-1].strip() if ':' in answer_d_input else answer_d_input.strip()
+            answer_d = answer_d_input.strip()
 
-            manual_revisions[q_index] = {
-                'q_id':     q_id,
-                'stem':     stem,
-                'answer_a': answer_a,
-                'answer_b': answer_b,
-                'answer_c': answer_c,
-                'answer_d': answer_d,
-            }
-
-            block = (
-                f'[{q_id}_START]\n'
-                f'[{q_id}] 題號={q_num}\n'
-                f'[{q_id}] 概念標籤=已省略\n'
-                f'[{q_id}] 題幹={stem}\n'
-                f'[{q_id}] 關鍵線索=已省略\n'
-                f'[{q_id}] 正確答案A={answer_a}\n'
-                f'[{q_id}] 錯誤選項B={answer_b}\n'
-                f'[{q_id}] 錯誤選項C={answer_c}\n'
-                f'[{q_id}] 錯誤選項D={answer_d}\n'
-                f'[{q_id}] 易錯選項1=已省略\n'
-                f'[{q_id}] 易錯選項2=已省略\n'
-                f'[{q_id}] 易錯推測1=已省略\n'
-                f'[{q_id}] 易錯推測2=已省略\n'
-                f'[{q_id}_END]'
-            )
-            revision_blocks.append(block)
-            send(f'{q_id} 修改內容已記錄。', delay=0.2)
-
-        manual_revision_text = '\n\n'.join(revision_blocks)
-        _write_log(f'[true_ending] 第二輪作答失敗，使用者手動修改題目：{list(manual_revisions.keys())}')
-        _write_log(f'[true_ending] 手動修改內容：\n{manual_revision_text}')
-
-        for q_index, rev in manual_revisions.items():
+            # 更新記憶體中的 revised_que_data
             if q_index in revised_que_data:
-                revised_que_data[q_index]['題幹']      = rev['stem']
-                revised_que_data[q_index]['正確答案A'] = rev['answer_a']
-                revised_que_data[q_index]['錯誤選項B'] = rev['answer_b']
-                revised_que_data[q_index]['錯誤選項C'] = rev['answer_c']
-                revised_que_data[q_index]['錯誤選項D'] = rev['answer_d']
+                revised_que_data[q_index]['題幹']      = stem
+                revised_que_data[q_index]['正確答案A'] = answer_a
+                revised_que_data[q_index]['錯誤選項B'] = answer_b
+                revised_que_data[q_index]['錯誤選項C'] = answer_c
+                revised_que_data[q_index]['錯誤選項D'] = answer_d
             else:
                 _write_log(f'[true_ending] 警告：Q{q_index} 不存在於 revised_que_data 中，跳過')
+
+            send(f'{q_id} 修改內容已記錄。', delay=0.2)
+
+        # ── 修復：將更新後的 revised_que_data 覆寫回 REVISED_QUE_LOG_PATH ──
+        try:
+            with open(REVISED_QUE_LOG_PATH, 'w', encoding='utf-8') as f:
+                for n in sorted(revised_que_data.keys()):
+                    q      = revised_que_data[n]
+                    q_id   = f'Q{n}'
+                    lines  = [f'[{q_id}_START]']
+                    for cn_key in ['題幹','概念標籤','關鍵線索',
+                                   '正確答案A','錯誤選項B','錯誤選項C','錯誤選項D',
+                                   '易錯選項1','易錯選項2','易錯推測1','易錯推測2']:
+                        val = q.get(cn_key, '')
+                        lines.append(f'[{q_id}] {cn_key}={val}')
+                    lines.append(f'[{q_id}_END]')
+                    lines.append('')
+                    f.write('\n'.join(lines) + '\n')
+            print(f'[run_second_round] REVISED_QUE_LOG_PATH 已更新：{REVISED_QUE_LOG_PATH}')
+            _write_log(f'[true_ending] 手動修改後已覆寫 que_set_log_r2')
+        except Exception as e:
+            send_alert(f'⚠️ que_set_log_r2 覆寫失敗：{e}，請通知系統管理員。')
+            return
 
         send('修改完成！', delay=0.3)
         send_button(
@@ -1411,7 +1405,7 @@ def run_second_round(all_revised: dict):
 
         if not all_answers:
             send('⚠️ 孿生班級重新作答仍失敗，請通知系統管理員。', delay=0.3)
-            _write_log(f'[true_ending] 第二輪作答重試後仍失敗，流程中止。revised_que_data 題數：{len(revised_que_data)}')
+            _write_log(f'[true_ending] 第二輪作答重試後仍失敗，流程中止。')
             return
 
     # ── 儲存作答矩陣 ──
